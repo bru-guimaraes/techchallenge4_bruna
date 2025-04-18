@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
 import numpy as np
@@ -28,21 +29,17 @@ class PrevisaoRequest(BaseModel):
     historico: List[float]
 
 @app.post("/prever")
-def prever_valor(request: PrevisaoRequest):
-    if len(request.historico) != 60:
-        raise HTTPException(status_code=400, detail="A lista deve conter exatamente 60 valores de fechamento.")
-
+def prever(request: PrevisaoRequest):
     try:
-        dados = np.array(request.historico).reshape(-1, 1)
-        dados_normalizados = scaler.transform(dados)
-        entrada = dados_normalizados.reshape(1, 60, 1)
-        previsao_normalizada = modelo.predict(entrada)
-        previsao = scaler.inverse_transform(previsao_normalizada)
+        entrada = np.array(request.historico[-60:]).reshape(1, 60, 1)
+        predicao_normalizada = modelo.predict(entrada)[0][0]
+        predicao = scaler.inverse_transform([[predicao_normalizada]])[0][0]
 
-        return {
-            "previsao_normalizada": float(previsao_normalizada[0][0]),
-            "previsao": float(previsao[0][0])
-        }
-
+        return JSONResponse(
+            content={
+                "preco_previsto": f"US$ {predicao:.2f}",
+                "explicacao": "Valor estimado de fechamento da ação para o próximo dia com base nos dados fornecidos"
+            }
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro durante a previsão: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao realizar previsão: {e}")
