@@ -7,7 +7,6 @@ import boto3
 import os
 from dotenv import load_dotenv
 import io
-import pathlib
 
 # Carrega variáveis do .env
 load_dotenv()
@@ -15,10 +14,10 @@ load_dotenv()
 # Parâmetros
 BUCKET = "bdadostchallengebruna"
 ARQUIVO_S3 = "acoes/AAPL_fechamento.parquet"
-CAMINHO_MODELO = "model/modelo_lstm.keras"
+MODELO_LOCAL = "model/modelo_lstm.keras"
+MODELO_S3 = "modelos/modelo_lstm.keras"
 
 try:
-    # Verifica se credenciais estão definidas
     aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_session_token = os.getenv("AWS_SESSION_TOKEN")
@@ -27,7 +26,6 @@ try:
     if not all([aws_access_key, aws_secret_key, aws_region]):
         raise EnvironmentError("❌ Variáveis de ambiente AWS não estão completamente definidas.")
 
-    # Inicializa cliente S3
     s3 = boto3.client(
         's3',
         aws_access_key_id=aws_access_key,
@@ -47,7 +45,6 @@ except Exception as e:
     raise RuntimeError(f"Erro ao acessar dados do S3: {e}")
 
 try:
-    # Pré-processamento
     print("🔄 Normalizando dados...")
     df = df[['Close']].dropna()
     scaler = MinMaxScaler()
@@ -75,16 +72,24 @@ try:
     model.compile(optimizer='adam', loss='mean_squared_error')
     model.fit(X, y, epochs=20, batch_size=32)
 
-    # Remove modelo anterior, se existir
-    model_path = pathlib.Path(CAMINHO_MODELO)
-    if model_path.exists():
-        model_path.unlink()
-        print(f"🗑️ Modelo anterior deletado: {CAMINHO_MODELO}")
-
-    # Salva modelo
     os.makedirs("model", exist_ok=True)
-    print(f"💾 Salvando modelo em {CAMINHO_MODELO}")
-    model.save(CAMINHO_MODELO)
+    print(f"💾 Salvando modelo em {MODELO_LOCAL}")
+    model.save(MODELO_LOCAL)
+
+    # Envia modelo treinado para o S3
+    print("☁️ Enviando modelo para o S3...")
+    try:
+        s3.delete_object(Bucket=BUCKET, Key=MODELO_S3)
+        print(f"🗑️ Modelo anterior deletado de s3://{BUCKET}/{MODELO_S3}")
+    except s3.exceptions.ClientError as e:
+        if e.response['Error']['Code'] != 'NoSuchKey':
+            raise e
+
+    s3.upload_file(MODELO_LOCAL, BUCKET, MODELO_S3)
+    print(f"✅ Modelo salvo e enviado para s3://{BUCKET}/{MODELO_S3}")
+
+    os.remove(MODELO_LOCAL)
+    print(f"🧹 Modelo local removido após upload.")
 
 except Exception as e:
     raise RuntimeError(f"Erro durante o treinamento ou salvamento do modelo: {e}")

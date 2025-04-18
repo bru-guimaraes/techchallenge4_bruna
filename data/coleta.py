@@ -37,7 +37,7 @@ try:
 except Exception as e:
     raise RuntimeError(f"❌ Erro durante a coleta ou o salvamento dos dados: {e}")
 
-# Envia para o S3 (removendo anterior se existir)
+# Envia para o S3
 print("☁️ Enviando para o S3...")
 
 try:
@@ -49,16 +49,20 @@ try:
         region_name=AWS_DEFAULT_REGION
     )
 
-    # Tenta deletar o arquivo anterior
+    # Tenta deletar o arquivo anterior se existir
     try:
         s3.delete_object(Bucket=BUCKET, Key=ARQUIVO_S3)
         print(f"🗑️ Arquivo anterior deletado de s3://{BUCKET}/{ARQUIVO_S3}")
-    except s3.exceptions.ClientError as delete_error:
-        print(f"⚠️ Aviso: Não foi possível deletar o arquivo anterior (pode não existir): {delete_error}")
+    except s3.exceptions.ClientError as e:
+        if e.response['Error']['Code'] != 'NoSuchKey':
+            raise e
 
-    # Upload novo arquivo
     s3.upload_file(ARQUIVO_LOCAL, BUCKET, ARQUIVO_S3)
     print(f"✅ Arquivo enviado com sucesso para s3://{BUCKET}/{ARQUIVO_S3}")
+
+    # Remove o arquivo local após o upload
+    os.remove(ARQUIVO_LOCAL)
+    print(f"🧹 Arquivo local {ARQUIVO_LOCAL} removido após upload.")
 
 except Exception as e:
     raise RuntimeError(f"❌ Falha ao enviar para o S3: {e}")
