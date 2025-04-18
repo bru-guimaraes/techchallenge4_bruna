@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
+import joblib
 import boto3
 import os
 from dotenv import load_dotenv
@@ -14,10 +15,11 @@ load_dotenv()
 # Parâmetros
 BUCKET = "bdadostchallengebruna"
 ARQUIVO_S3 = "acoes/AAPL_fechamento.parquet"
-MODELO_LOCAL = "model/modelo_lstm.keras"
-MODELO_S3 = "modelos/modelo_lstm.keras"
+SCALER_LOCAL = "model/scaler.gz"
+SCALER_S3 = "modelos/scaler.gz"
 
 try:
+    # Verifica se credenciais estão definidas
     aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_session_token = os.getenv("AWS_SESSION_TOKEN")
@@ -26,6 +28,7 @@ try:
     if not all([aws_access_key, aws_secret_key, aws_region]):
         raise EnvironmentError("❌ Variáveis de ambiente AWS não estão completamente definidas.")
 
+    # Inicializa cliente S3
     s3 = boto3.client(
         's3',
         aws_access_key_id=aws_access_key,
@@ -45,11 +48,13 @@ except Exception as e:
     raise RuntimeError(f"Erro ao acessar dados do S3: {e}")
 
 try:
+    # Pré-processamento
     print("🔄 Normalizando dados...")
     df = df[['Close']].dropna()
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(df)
 
+    # Cria janelas de tempo
     def criar_dataset(dataset, look_back=60):
         X, y = [], []
         for i in range(look_back, len(dataset)):
@@ -64,6 +69,7 @@ except Exception as e:
     raise RuntimeError(f"Erro no pré-processamento dos dados: {e}")
 
 try:
+    # Modelo
     print("🧠 Treinando modelo LSTM...")
     model = Sequential()
     model.add(LSTM(units=50, return_sequences=True, input_shape=(X.shape[1], 1)))
@@ -72,24 +78,17 @@ try:
     model.compile(optimizer='adam', loss='mean_squared_error')
     model.fit(X, y, epochs=20, batch_size=32)
 
+    # Salva modelo e scaler
     os.makedirs("model", exist_ok=True)
-    print(f"💾 Salvando modelo em {MODELO_LOCAL}")
-    model.save(MODELO_LOCAL)
+    print("💾 Salvando modelo em model/modelo_lstm.keras")
+    model.save('model/modelo_lstm.keras')
 
-    # Envia modelo treinado para o S3
-    print("☁️ Enviando modelo para o S3...")
-    try:
-        s3.delete_object(Bucket=BUCKET, Key=MODELO_S3)
-        print(f"🗑️ Modelo anterior deletado de s3://{BUCKET}/{MODELO_S3}")
-    except s3.exceptions.ClientError as e:
-        if e.response['Error']['Code'] != 'NoSuchKey':
-            raise e
+    print("💾 Salvando scaler em model/scaler.gz")
+    joblib.dump(scaler, SCALER_LOCAL)
 
-    s3.upload_file(MODELO_LOCAL, BUCKET, MODELO_S3)
-    print(f"✅ Modelo salvo e enviado para s3://{BUCKET}/{MODELO_S3}")
-
-    os.remove(MODELO_LOCAL)
-    print(f"🧹 Modelo local removido após upload.")
+    print("☁️ Enviando scaler para o S3...")
+    s3.upload_file(SCALER_LOCAL, BUCKET, SCALER_S3)
+    print(f"✅ Scaler enviado para s3://{BUCKET}/{SCALER_S3}")
 
 except Exception as e:
     raise RuntimeError(f"Erro durante o treinamento ou salvamento do modelo: {e}")
