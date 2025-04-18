@@ -1,0 +1,33 @@
+# Ambiente virtual
+venv/
+
+# Arquivos de ambiente/sensíveis
+.env
+
+# Dados gerados
+data/*.parquet
+*.csv
+*.h5
+*.keras
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+
+# Modelos
+model/*.keras
+model/*.h5
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Docker
+*.pid
+*.sock
+docker-compose.override.yml
