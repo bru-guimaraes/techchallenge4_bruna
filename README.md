@@ -1,95 +1,73 @@
-# Previsão de Preços de Ações com LSTM \U0001F4C8
+# Model Loader
 
-[![Docker](https://img.shields.io/badge/docker-ready-blue)](https://www.docker.com/)
-[![API](https://img.shields.io/badge/fastapi-running-brightgreen)](http://localhost:8000/docs)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Este projeto implementa uma API RESTful com FastAPI para previsão de preços de ações utilizando um modelo LSTM treinado com dados do Yahoo Finance. A aplicação inclui:
 
-Este projeto cria uma solução de Machine Learning com redes neurais **LSTM** para prever o preço de fechamento de ações com base em histórico da bolsa. Inclui desde a coleta com `yfinance` até uma API funcional com FastAPI + Docker.
+## ✅ Funcionalidades
+- Coleta de dados históricos com `yfinance`
+- Armazenamento em Parquet e envio para Amazon S3
+- Treinamento de modelo LSTM com Keras
+- Avaliação com métricas: MAE, RMSE, MAPE
+- Exportação do modelo e scaler (`.keras` e `.gz`)
+- API RESTful com FastAPI
+- Swagger disponível em `/docs`
+- Middleware de monitoramento de tempo de resposta
 
----
+## 🚀 Como usar
 
-### ✅ Funcionalidades
-
-- Coleta de dados da AAPL com `yfinance`
-- Armazenamento em formato Parquet no AWS S3
-- Treinamento de modelo LSTM com `TensorFlow`
-- Avaliação com MAE, RMSE e MAPE
-- API REST com FastAPI para inferência
-- Docker + Docker Compose para execução completa
-
----
-
-### 🔍 Como executar com Docker
-
-1. Crie o arquivo `.env` na raiz:
-
+### 1. Variáveis de ambiente
+Crie um arquivo `.env` com:
 ```env
-AWS_ACCESS_KEY_ID=SUACHAVE
-AWS_SECRET_ACCESS_KEY=SUA_SECRET
-AWS_SESSION_TOKEN=SEU_TOKEN
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_SESSION_TOKEN=...
 AWS_DEFAULT_REGION=us-east-1
 ```
 
-2. Execute:
+### 2. Coleta de dados
+```bash
+python data/coleta.py
+```
+
+### 3. Treinamento do modelo
+```bash
+python model/treinar_modelo.py
+```
+
+### 4. Avaliação do modelo
+```bash
+python model/avaliacao_modelo_lstm.py
+```
+
+### 5. Subir API com Docker
 ```bash
 docker compose up --build
 ```
 
-3. Acesse a API em:
-[http://localhost:8000/docs](http://localhost:8000/docs)
+### 6. Testar API
+Acesse: [http://localhost:8000/docs](http://localhost:8000/docs)
 
----
-
-### 📈 Exemplo de previsão:
-
-POST `/prever`
+Exemplo de payload para `/prever`:
 ```json
 {
-  "historico": [199.2, 198.7, 200.1, ..., 205.3]  // 60 valores
+  "historico": [191.34, 191.50, ..., 203.44]
 }
 ```
 
-Resposta:
-```json
-{
-  "previsao": 206.72
-}
+## 📈 Monitoramento
+A API possui middleware que registra o tempo de resposta de cada requisição no console:
+```
+⏱️ POST /prever demorou 0.123s
 ```
 
----
-
-### 📅 Pipeline automatizada:
-
-Executada dentro do Docker via `entrypoint.sh`:
-- `data/coleta.py`
-- `model/treino_modelo.py`
-- `model/avaliacao_modelo_lstm.py`
-- API FastAPI com Uvicorn
+## 📂 Estrutura
+- `app/` → API FastAPI
+- `data/` → Coleta de dados
+- `model/` → Treinamento e avaliação
+- `utils/` → Utilitários
+- `docker/` → Dockerfile, entrypoint
 
 ---
 
-### 📋 Tecnologias usadas
-- Python 3.10
-- FastAPI
-- TensorFlow 2.15
-- yfinance + pandas + boto3
-- Docker + Compose
+🔒 Projeto organizado para deploy local ou em nuvem (AWS, Render, Railway).
 
 ---
-
-### ✅ Status do Projeto
-| Etapa                          | Status  |
-|-------------------------------|----------|
-| Coleta e S3                   | Concluído |
-| Treino LSTM                   | Concluído |
-| Avaliação com métricas       | Concluído |
-| Deploy da API                 | Concluído |
-| Docker e automação           | Concluído |
-| Documentação (README, .env)  | Concluído |
-| Vídeo de apresentação        | Em andamento |
-
----
-
-### 📅 Autora
-Bruna Guimarães  
-⚖️ Projeto do Tech Challenge Fase 4
