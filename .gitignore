@@ -9,6 +9,9 @@ data/*.parquet
 *.csv
 *.h5
 *.keras
+model/*.keras
+model/*.h5
+model/*.gz
 
 # Cache Python
 __pycache__/
@@ -16,9 +19,8 @@ __pycache__/
 *.pyo
 *.log
 
-# Modelos
-model/*.keras
-model/*.h5
+# Modelos (adicional por segurança)
+model_lstm.*
 
 # Arquivos do sistema
 .DS_Store

@@ -26,6 +26,7 @@ async def log_request_time(request: Request, call_next):
 
 # Schema de entrada
 class PrevisaoRequest(BaseModel):
+    ticker: str
     historico: List[float]
 
 @app.post("/prever")
@@ -37,6 +38,7 @@ def prever(request: PrevisaoRequest):
 
         return JSONResponse(
             content={
+                "ticker": request.ticker.upper(),
                 "preco_previsto": f"US$ {predicao:.2f}",
                 "explicacao": "Valor estimado de fechamento da ação para o próximo dia com base nos dados fornecidos"
             }

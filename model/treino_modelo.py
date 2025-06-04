@@ -1,94 +1,96 @@
-import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-import joblib
+import numpy as np
 import boto3
+import io
+import joblib
+import sys
 import os
 from dotenv import load_dotenv
-import io
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
-# Carrega variáveis do .env
+# Permite importar do utils
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.preprocessamento import normalizar_dados, criar_janelas
+
+# Carrega variáveis de ambiente
 load_dotenv()
 
-# Parâmetros
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION")
 BUCKET = "bdadostchallengebruna"
-ARQUIVO_S3 = "acoes/AAPL_fechamento.parquet"
-SCALER_LOCAL = "model/scaler.gz"
-SCALER_S3 = "modelos/scaler.gz"
 
+# Carrega a fonte de dados utilizada
 try:
-    # Verifica se credenciais estão definidas
-    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-    aws_region = os.getenv("AWS_DEFAULT_REGION")
+    with open("data/fonte_dados.txt", "r") as f:
+        fonte_dados = f.read().strip()
+except Exception:
+    fonte_dados = "indefinida"
 
-    if not all([aws_access_key, aws_secret_key, aws_region]):
-        raise EnvironmentError("❌ Variáveis de ambiente AWS não estão completamente definidas.")
+# Define os nomes de arquivos com base na fonte
+modelo_filename = f"model_lstm_{fonte_dados}.h5"
+scaler_filename = f"scaler_{fonte_dados}.gz"
 
-    # Inicializa cliente S3
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key,
-        aws_session_token=aws_session_token,
-        region_name=aws_region
-    )
+# Ticker (mantemos o mesmo para consistência)
+TICKER = "AAPL"
+ARQUIVO_S3 = f"acoes/{TICKER}_fechamento.parquet"
 
-    print("☁️ Lendo dados do S3...")
+if not all([AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION]):
+    raise EnvironmentError("❌ Credenciais AWS ausentes ou mal definidas no .env.")
+
+# Cliente S3
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    aws_session_token=AWS_SESSION_TOKEN,
+    region_name=AWS_DEFAULT_REGION
+)
+
+# Busca os dados no S3
+print("☁️ Lendo dados do S3...")
+try:
     obj = s3.get_object(Bucket=BUCKET, Key=ARQUIVO_S3)
     df = pd.read_parquet(io.BytesIO(obj['Body'].read()))
-
-    if df.empty:
-        raise ValueError("❌ O DataFrame lido do S3 está vazio.")
-
 except Exception as e:
     raise RuntimeError(f"Erro ao acessar dados do S3: {e}")
 
+# Pré-processamento
+print("🔄 Normalizando dados...")
+dados_normalizados, scaler = normalizar_dados(df[['Close']].values)
+X, y = criar_janelas(dados_normalizados, look_back=60)
+X = X.reshape((X.shape[0], X.shape[1], 1))
+
+# Treinamento
+print("🧠 Treinando modelo LSTM...")
+model = Sequential()
+model.add(LSTM(50, return_sequences=True, input_shape=(X.shape[1], 1)))
+model.add(LSTM(50))
+model.add(Dense(1))
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(X, y, epochs=20, batch_size=32)
+
+# Salva localmente
+os.makedirs("model", exist_ok=True)
+model.save(f"model/{modelo_filename}")
+joblib.dump(scaler, f"model/{scaler_filename}")
+print(f"💾 Modelo salvo como model/{modelo_filename}")
+print(f"💾 Scaler salvo como model/{scaler_filename}")
+
+# Envia scaler para o S3
+print("☁️ Enviando scaler para o S3...")
 try:
-    # Pré-processamento
-    print("🔄 Normalizando dados...")
-    df = df[['Close']].dropna()
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(df)
-
-    # Cria janelas de tempo
-    def criar_dataset(dataset, look_back=60):
-        X, y = [], []
-        for i in range(look_back, len(dataset)):
-            X.append(dataset[i-look_back:i, 0])
-            y.append(dataset[i, 0])
-        return np.array(X), np.array(y)
-
-    X, y = criar_dataset(scaled_data)
-    X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-
+    s3.upload_file(f"model/{scaler_filename}", BUCKET, f"modelos/{scaler_filename}")
+    print(f"✅ Scaler enviado para s3://{BUCKET}/modelos/{scaler_filename}")
 except Exception as e:
-    raise RuntimeError(f"Erro no pré-processamento dos dados: {e}")
+    raise RuntimeError(f"Erro ao enviar scaler para o S3: {e}")
 
+# Envia modelo para o S3
+print("☁️ Enviando modelo para o S3...")
 try:
-    # Modelo
-    print("🧠 Treinando modelo LSTM...")
-    model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(X.shape[1], 1)))
-    model.add(LSTM(units=50))
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    model.fit(X, y, epochs=20, batch_size=32)
-
-    # Salva modelo e scaler
-    os.makedirs("model", exist_ok=True)
-    print("💾 Salvando modelo em model/modelo_lstm.keras")
-    model.save('model/modelo_lstm.keras')
-
-    print("💾 Salvando scaler em model/scaler.gz")
-    joblib.dump(scaler, SCALER_LOCAL)
-
-    print("☁️ Enviando scaler para o S3...")
-    s3.upload_file(SCALER_LOCAL, BUCKET, SCALER_S3)
-    print(f"✅ Scaler enviado para s3://{BUCKET}/{SCALER_S3}")
-
+    s3.upload_file(f"model/{modelo_filename}", BUCKET, f"modelos/{modelo_filename}")
+    print(f"✅ Modelo enviado para s3://{BUCKET}/modelos/{modelo_filename}")
 except Exception as e:
-    raise RuntimeError(f"Erro durante o treinamento ou salvamento do modelo: {e}")
+    raise RuntimeError(f"Erro ao enviar modelo para o S3: {e}")
