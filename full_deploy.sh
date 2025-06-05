@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão 100% universal"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e definitiva"
 
 # --- PRE-REQUISITOS BÁSICOS ---
 echo "🔧 Validando pré-requisitos..."
@@ -39,17 +39,27 @@ if [ ! -d "$HOME/techchallenge4_bruna" ]; then
 else
     echo "🔄 Atualizando projeto do GitHub..."
     cd techchallenge4_bruna
-    git stash || true
-    git pull
+    git reset --hard origin/main   # força ficar igual ao remoto
+    git pull || true
 fi
 cd ~/techchallenge4_bruna
 
+# --- GARANTIR QUE NÃO ESTÁ EM NENHUM ENV ---
+echo "🚧 Garantindo ambiente limpo antes de remover environment..."
+conda deactivate || true
+
 # --- (RE)CRIA ENVIRONMENT ---
 echo "♻️ (Re)criando o environment lstm-pipeline..."
-mamba env remove -n lstm-pipeline -y || true
+if conda info --envs | grep -q lstm-pipeline; then
+    echo "⚠️ Ambiente lstm-pipeline já existe, removendo..."
+    mamba env remove -n lstm-pipeline -y || true
+fi
+
 mamba env create -f environment.yml
 
 # --- ATIVA ENVIRONMENT ---
+echo "✅ Ativando o environment lstm-pipeline"
+source ~/miniconda3/etc/profile.d/conda.sh
 conda activate lstm-pipeline
 
 # --- EXECUTA PIPELINE DE COLETA E TREINO ---
