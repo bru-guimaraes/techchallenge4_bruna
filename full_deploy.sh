@@ -39,7 +39,7 @@ else
     echo "✅ Miniconda já instalado"
 fi
 
-# --- ATIVA CONDA ---
+# --- GARANTE QUE O CONDA ESTÁ ATIVADO NO CONTEXTO DO SCRIPT ---
 source ~/miniconda3/etc/profile.d/conda.sh
 
 # --- INSTALA MAMBA (caso não tenha) ---
