@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY UNIVERSAL com variável MINICONDA_PATH"
+echo "🚀 Iniciando"
 
 # Defina o caminho da instalação Miniconda no volume maior
 MINICONDA_PATH=/mnt/ebs100/miniconda3
@@ -39,5 +39,14 @@ if [ -f requirements.txt ]; then
 else
   echo "⚠️ Arquivo requirements.txt não encontrado, pulando instalação pip."
 fi
+
+# Executa build e run do docker container
+echo "🐳 Construindo e rodando container Docker..."
+docker stop lstm-app-container || true
+docker rm lstm-app-container || true
+docker rmi lstm-app || true
+
+docker build -t lstm-app .
+docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
