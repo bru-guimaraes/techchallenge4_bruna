@@ -1,75 +1,92 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY portátil no EC2"
+echo "🚀 Iniciando FULL DEPLOY UNIVERSAL"
 
-# --- Atualiza ou clona o projeto ---
-if [ ! -d "$HOME/techchallenge4_bruna" ]; then
-    echo "📂 Clonando projeto no home..."
-    git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git "$HOME/techchallenge4_bruna"
+# --- Define variáveis básicas ---
+MINICONDA_DIR="$HOME/miniconda3"
+ENV_NAME="lstm-pipeline"
+PROJECT_DIR="$HOME/techchallenge4_bruna"
+ENV_YML="$PROJECT_DIR/environment.yml"
+
+# --- Função para adicionar export no bashrc se não existir ---
+add_to_bashrc_if_missing() {
+  local line="$1"
+  grep -qxF "$line" ~/.bashrc || echo "$line" >> ~/.bashrc
+}
+
+# --- Atualiza projeto git ---
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "📂 Clonando projeto em $PROJECT_DIR"
+  git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git "$PROJECT_DIR"
 else
-    echo "🔄 Atualizando projeto no home..."
-    cd "$HOME/techchallenge4_bruna"
-    git reset --hard origin/main
-    git pull || true
+  echo "🔄 Atualizando projeto em $PROJECT_DIR"
+  cd "$PROJECT_DIR"
+  git reset --hard origin/main
+  git pull || true
 fi
 
-cd "$HOME/techchallenge4_bruna"
+cd "$PROJECT_DIR"
 
-# --- Verifica e instala Docker ---
-if ! command -v docker &> /dev/null; then
-    echo "🐳 Instalando Docker..."
-    sudo yum update -y
-    sudo yum install -y docker
-    sudo systemctl start docker
-    sudo usermod -aG docker "$USER"
+# --- Instala Miniconda se não existir ---
+if [ ! -d "$MINICONDA_DIR" ]; then
+  echo "📦 Instalando Miniconda em $MINICONDA_DIR..."
+  wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
+  bash /tmp/miniconda.sh -b -p "$MINICONDA_DIR"
+  rm /tmp/miniconda.sh
+
+  add_to_bashrc_if_missing "export PATH=\"$MINICONDA_DIR/bin:\$PATH\""
+  export PATH="$MINICONDA_DIR/bin:$PATH"
 else
-    echo "✅ Docker já instalado"
-    sudo systemctl start docker
+  echo "✅ Miniconda já instalado"
 fi
 
-# --- Verifica e instala Miniconda ---
-if [ ! -d "$HOME/miniconda3" ]; then
-    echo "📦 Instalando Miniconda em $HOME/miniconda3..."
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O "$HOME/miniconda.sh"
-    bash "$HOME/miniconda.sh" -b -p "$HOME/miniconda3"
-    rm "$HOME/miniconda.sh"
-    echo 'export PATH="$HOME/miniconda3/bin:$PATH"' >> "$HOME/.bashrc"
-    export PATH="$HOME/miniconda3/bin:$PATH"
-else
-    echo "✅ Miniconda já instalado"
-fi
+# --- Configura ambiente Conda para shell atual ---
+source "$MINICONDA_DIR/etc/profile.d/conda.sh"
 
-# --- Carrega conda e ativa base ---
-source "$HOME/miniconda3/etc/profile.d/conda.sh"
-conda activate base
-
-# --- Verifica e instala mamba ---
+# --- Instala mamba se não existir ---
 if ! command -v mamba &> /dev/null; then
-    echo "🚀 Instalando mamba..."
-    conda install -n base -c conda-forge mamba -y
+  echo "🚀 Instalando mamba..."
+  conda install -n base -c conda-forge mamba -y
 else
-    echo "✅ Mamba já instalado"
+  echo "✅ Mamba já instalado"
 fi
 
-# --- Cria ou atualiza o ambiente lstm-pipeline ---
-if conda info --envs | grep -q lstm-pipeline; then
-    echo "♻️ Atualizando ambiente lstm-pipeline"
-    mamba env update -n lstm-pipeline -f environment.yml --prune
+# --- Corrige LD_LIBRARY_PATH para evitar erros libmamba ---
+LIB_PATH="$MINICONDA_DIR/lib"
+export LD_LIBRARY_PATH="$LIB_PATH:$LD_LIBRARY_PATH"
+add_to_bashrc_if_missing "export LD_LIBRARY_PATH=\"$LIB_PATH:\$LD_LIBRARY_PATH\""
+
+# --- Cria ou atualiza ambiente Conda ---
+if conda env list | grep -q "$ENV_NAME"; then
+  echo "♻️ Atualizando ambiente $ENV_NAME"
+  mamba env update -n "$ENV_NAME" -f "$ENV_YML" --prune
 else
-    echo "🚧 Criando ambiente lstm-pipeline"
-    mamba env create -f environment.yml
+  echo "🚧 Criando ambiente $ENV_NAME"
+  mamba env create -f "$ENV_YML"
 fi
 
-# --- Ativa ambiente lstm-pipeline ---
-conda activate lstm-pipeline
+# --- Ativa ambiente ---
+conda activate "$ENV_NAME"
 
 # --- Executa scripts Python ---
 echo "📥 Executando coleta e treino de modelo..."
 python data/coleta.py
 python model/treino_modelo.py
 
-# --- Build e run Docker ---
+# --- Instala e inicia Docker se necessário ---
+if ! command -v docker &> /dev/null; then
+  echo "🐳 Instalando Docker..."
+  sudo yum update -y
+  sudo yum install -y docker
+  sudo systemctl start docker
+  sudo usermod -aG docker "$USER"
+else
+  echo "✅ Docker já instalado"
+  sudo systemctl start docker
+fi
+
+# --- Build e run container Docker ---
 echo "🐳 (Re)subindo container Docker..."
 docker stop lstm-app-container || true
 docker rm lstm-app-container || true
@@ -77,4 +94,4 @@ docker rmi lstm-app || true
 docker build -t lstm-app .
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
-echo "✅ FULL DEPLOY portátil concluído com sucesso!"
+echo "✅ FULL DEPLOY concluído com sucesso!"
