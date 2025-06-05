@@ -1,9 +1,10 @@
 name: lstm-pipeline
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
   - python=3.10
+  - mamba
   - pip
   - pip:
       - numpy==1.26.4
