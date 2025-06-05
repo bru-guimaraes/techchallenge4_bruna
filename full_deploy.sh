@@ -32,9 +32,12 @@ conda env create -f environment.yml || conda env update -n lstm-pipeline -f envi
 echo "🟢 Ativando ambiente lstm-pipeline..."
 conda activate lstm-pipeline
 
-# Executa o deploy
-echo "🐳 Executando deploy..."
-chmod +x full_deploy.sh
-./full_deploy.sh
+# Instala dependências pip automaticamente
+if [ -f requirements.txt ]; then
+  echo "📦 Instalando dependências pip..."
+  pip install -r requirements.txt
+else
+  echo "⚠️ Arquivo requirements.txt não encontrado, pulando instalação pip."
+fi
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
