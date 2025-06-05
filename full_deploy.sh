@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão definitiva (clean & robusta)"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e definitiva"
 
 ########################################
-# 1️⃣ Instala Git (apenas se ainda não tiver)
+# 1️⃣ Instala Git (se necessário)
 ########################################
 
 if ! command -v git &> /dev/null; then
@@ -27,26 +27,22 @@ fi
 source ~/miniconda3/etc/profile.d/conda.sh
 
 ########################################
-# 3️⃣ Cria (se necessário) e ativa o environment Conda
+# 3️⃣ (Re)cria sempre o environment para blindagem máxima
 ########################################
 
-if ! conda info --envs | grep -q "lstm-pipeline"; then
-    echo "⚠️ Environment lstm-pipeline não encontrado. Criando..."
-    conda env create -f environment.yml
-else
-    echo "✅ Environment lstm-pipeline já existe."
-fi
+echo "♻️ (Re)criando o environment lstm-pipeline..."
+conda env remove -n lstm-pipeline -y || true
+conda env create -f environment.yml
 
 conda activate lstm-pipeline
 
 ########################################
-# 4️⃣ Atualiza variáveis de ambiente (auto_env)
+# 4️⃣ Executa auto_env
 ########################################
 
-echo "📄 Executando auto_env.py para atualizar credenciais..."
+echo "📄 Executando auto_env.py..."
 python3 auto_env.py
 
-# Garante chaves fixas
 if ! grep -q "USE_S3" .env; then
     echo "USE_S3=true" >> .env
 fi
@@ -72,7 +68,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 ########################################
-# 6️⃣ Executa pipeline de coleta + treino
+# 6️⃣ Executa pipeline
 ########################################
 
 echo "📥 Coletando dados e treinando modelo..."
