@@ -52,17 +52,14 @@ else
     echo "✅ Mamba já instalado"
 fi
 
-# --- GARANTIR QUE NÃO ESTÁ EM NENHUM ENV ---
-conda deactivate || true
-
-# --- (RE)CRIA ENVIRONMENT ---
+# --- ATUALIZA OU CRIA O ENVIRONMENT lstm-pipeline ---
 if conda info --envs | grep -q lstm-pipeline; then
-    echo "♻️ Ambiente lstm-pipeline já existe, removendo para recriar..."
-    mamba env remove -n lstm-pipeline -y || true
+    echo "⚠️ Ambiente lstm-pipeline já existe, atualizando..."
+    mamba env update -n lstm-pipeline -f environment.yml
+else
+    echo "🚧 Criando o environment lstm-pipeline..."
+    mamba env create -f environment.yml
 fi
-
-echo "🚧 Criando o environment lstm-pipeline..."
-mamba env create -f environment.yml
 
 # --- ATIVA ENVIRONMENT ---
 echo "✅ Ativando o environment lstm-pipeline"
