@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão definitiva Git-centric!"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão definitiva e blindada!"
 
 ########################################
 # 1️⃣ Valida Miniconda
@@ -14,11 +14,14 @@ if [ ! -f ~/miniconda3/etc/profile.d/conda.sh ]; then
     rm miniconda.sh
 fi
 
-# Só agora podemos dar o source
+########################################
+# 2️⃣ Só agora podemos ativar o conda
+########################################
+
 source ~/miniconda3/etc/profile.d/conda.sh
 
 ########################################
-# 2️⃣ Valida environment Conda via environment.yml
+# 3️⃣ Valida environment Conda via environment.yml
 ########################################
 
 if ! conda info --envs | grep -q "lstm-pipeline"; then
@@ -31,13 +34,13 @@ fi
 conda activate lstm-pipeline
 
 ########################################
-# 3️⃣ Executa auto_env.py
+# 4️⃣ Executa auto_env.py
 ########################################
 
 echo "📄 Executando auto_env.py para atualizar credenciais e IP..."
 python3 auto_env.py
 
-# Garante as variáveis fixas (por segurança extra)
+# Garante variáveis fixas
 if ! grep -q "USE_S3" .env; then
     echo "USE_S3=true" >> .env
 fi
@@ -49,20 +52,19 @@ fi
 export $(grep -v '^#' .env | xargs)
 
 ########################################
-# 4️⃣ Limpa diretório de projeto antigo
+# 5️⃣ Limpa o diretório antigo (mantém .env)
 ########################################
 
 echo "🧹 Limpando código antigo (preservando .env)..."
 find . -mindepth 1 -maxdepth 1 ! -name '.env' -exec rm -rf {} +
 
 ########################################
-# 5️⃣ Sempre clona do GitHub (main branch)
+# 6️⃣ Sempre clona do GitHub (main branch)
 ########################################
 
 echo "🌐 Clonando projeto atualizado do GitHub..."
 git clone -b main https://github.com/bru-guimaraes/techchallenge4_bruna.git repo_clone
 
-# Move o conteúdo da pasta clone para o diretório raiz
 mv repo_clone/* .
 mv repo_clone/.* . 2>/dev/null || true
 rm -rf repo_clone
@@ -70,7 +72,7 @@ rm -rf repo_clone
 echo "✅ Código atualizado a partir do GitHub"
 
 ########################################
-# 6️⃣ Valida Docker
+# 7️⃣ Valida Docker
 ########################################
 
 if ! command -v docker &> /dev/null; then
@@ -84,7 +86,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 ########################################
-# 7️⃣ Executa pipeline
+# 8️⃣ Executa pipeline
 ########################################
 
 echo "📥 Coletando dados e treinando modelo..."
@@ -92,7 +94,7 @@ python3 data/coleta.py
 python3 model/treino_modelo.py
 
 ########################################
-# 8️⃣ Builda e reinicia o container Docker
+# 9️⃣ Builda e reinicia o container Docker
 ########################################
 
 echo "🐳 Subindo Docker atualizado..."
