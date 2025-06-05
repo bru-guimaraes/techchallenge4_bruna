@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e definitiva"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e auto-atualizável"
 
 ########################################
-# 1️⃣ Instala Git (se necessário)
+# 0️⃣ Garantir git instalado
 ########################################
 
 if ! command -v git &> /dev/null; then
@@ -14,7 +14,16 @@ if ! command -v git &> /dev/null; then
 fi
 
 ########################################
-# 2️⃣ Valida Miniconda
+# 1️⃣ Auto-atualização do projeto via git pull
+########################################
+
+echo "🔄 Atualizando projeto com git pull..."
+git pull
+
+echo "✅ Repositório local atualizado com sucesso."
+
+########################################
+# 2️⃣ Garantir Miniconda instalado
 ########################################
 
 if [ ! -f ~/miniconda3/etc/profile.d/conda.sh ]; then
@@ -27,7 +36,7 @@ fi
 source ~/miniconda3/etc/profile.d/conda.sh
 
 ########################################
-# 3️⃣ (Re)cria sempre o environment para blindagem máxima
+# 3️⃣ Blindagem do environment Conda (sempre recria limpo)
 ########################################
 
 echo "♻️ (Re)criando o environment lstm-pipeline..."
@@ -37,7 +46,7 @@ conda env create -f environment.yml
 conda activate lstm-pipeline
 
 ########################################
-# 4️⃣ Executa auto_env
+# 4️⃣ Atualiza variáveis de ambiente com auto_env
 ########################################
 
 echo "📄 Executando auto_env.py..."
@@ -54,7 +63,7 @@ fi
 export $(grep -v '^#' .env | xargs)
 
 ########################################
-# 5️⃣ Valida Docker
+# 5️⃣ Garantir Docker instalado
 ########################################
 
 if ! command -v docker &> /dev/null; then
@@ -68,7 +77,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 ########################################
-# 6️⃣ Executa pipeline
+# 6️⃣ Executar pipeline de coleta e treino
 ########################################
 
 echo "📥 Coletando dados e treinando modelo..."
@@ -76,7 +85,7 @@ python3 data/coleta.py
 python3 model/treino_modelo.py
 
 ########################################
-# 7️⃣ Builda e reinicia o container Docker
+# 7️⃣ Build e deploy do Docker
 ########################################
 
 echo "🐳 Subindo Docker atualizado..."
