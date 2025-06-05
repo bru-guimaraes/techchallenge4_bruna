@@ -1,19 +1,34 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e definitiva"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão universal e definitiva"
 
-# --- PRE-REQUISITOS BÁSICOS ---
-echo "🔧 Validando pré-requisitos..."
-sudo yum update -y
-sudo yum install -y git docker gcc g++ make
+# --- CRIA DIRETÓRIO NO VOLUME GRANDE SE NÃO EXISTIR ---
+if [ ! -d "/mnt/data/techchallenge4_bruna" ]; then
+    echo "📂 Criando diretório de trabalho no volume com espaço..."
+    mkdir -p /mnt/data/techchallenge4_bruna
+    cd /mnt/data
+    git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git
+else
+    echo "✅ Diretório de trabalho já existe"
+    cd /mnt/data/techchallenge4_bruna
+    git reset --hard origin/main
+    git pull || true
+fi
 
-# --- DOCKER ---
-echo "🐳 Validando Docker..."
-sudo service docker start || sudo systemctl start docker
-sudo usermod -aG docker ec2-user
+# --- VALIDANDO DOCKER ---
+if ! command -v docker &> /dev/null; then
+    echo "🐳 Instalando Docker..."
+    sudo yum update -y
+    sudo yum install -y docker
+    sudo service docker start || sudo systemctl start docker
+    sudo usermod -aG docker ec2-user
+else
+    echo "✅ Docker já instalado"
+    sudo service docker start || sudo systemctl start docker
+fi
 
-# --- MINICONDA ---
+# --- VALIDANDO MINICONDA ---
 if [ ! -d "$HOME/miniconda3" ]; then
     echo "📦 Instalando Miniconda..."
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
@@ -27,39 +42,28 @@ fi
 # --- ATIVA CONDA ---
 source ~/miniconda3/etc/profile.d/conda.sh
 
-# --- INSTALA MAMBA (melhor que conda puro) ---
-echo "🚀 Instalando mamba (gerenciador rápido de envs)..."
-conda install -n base -c conda-forge mamba -y
-
-# --- CLONA OU ATUALIZA REPO ---
-cd ~
-if [ ! -d "$HOME/techchallenge4_bruna" ]; then
-    echo "🌐 Clonando projeto do GitHub..."
-    git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git
+# --- INSTALA MAMBA (caso não tenha) ---
+if ! conda list | grep -q mamba; then
+    echo "🚀 Instalando mamba (mais rápido que conda puro)..."
+    conda install -n base -c conda-forge mamba -y
 else
-    echo "🔄 Atualizando projeto do GitHub..."
-    cd techchallenge4_bruna
-    git reset --hard origin/main   # força ficar igual ao remoto
-    git pull || true
+    echo "✅ Mamba já instalado"
 fi
-cd ~/techchallenge4_bruna
 
 # --- GARANTIR QUE NÃO ESTÁ EM NENHUM ENV ---
-echo "🚧 Garantindo ambiente limpo antes de remover environment..."
 conda deactivate || true
 
 # --- (RE)CRIA ENVIRONMENT ---
-echo "♻️ (Re)criando o environment lstm-pipeline..."
 if conda info --envs | grep -q lstm-pipeline; then
-    echo "⚠️ Ambiente lstm-pipeline já existe, removendo..."
+    echo "♻️ Ambiente lstm-pipeline já existe, removendo para recriar..."
     mamba env remove -n lstm-pipeline -y || true
 fi
 
+echo "🚧 Criando o environment lstm-pipeline..."
 mamba env create -f environment.yml
 
 # --- ATIVA ENVIRONMENT ---
 echo "✅ Ativando o environment lstm-pipeline"
-source ~/miniconda3/etc/profile.d/conda.sh
 conda activate lstm-pipeline
 
 # --- EXECUTA PIPELINE DE COLETA E TREINO ---
