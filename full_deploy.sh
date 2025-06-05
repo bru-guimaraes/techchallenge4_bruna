@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão final com environment.yml!"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão definitiva Git-centric!"
 
 ########################################
 # 1️⃣ Valida Miniconda
@@ -31,13 +31,13 @@ fi
 conda activate lstm-pipeline
 
 ########################################
-# 3️⃣ Executa auto_env
+# 3️⃣ Executa auto_env.py
 ########################################
 
 echo "📄 Executando auto_env.py para atualizar credenciais e IP..."
 python3 auto_env.py
 
-# Garante as variáveis fixas
+# Garante as variáveis fixas (por segurança extra)
 if ! grep -q "USE_S3" .env; then
     echo "USE_S3=true" >> .env
 fi
@@ -49,32 +49,25 @@ fi
 export $(grep -v '^#' .env | xargs)
 
 ########################################
-# 4️⃣ Garante diretórios do projeto
+# 4️⃣ Limpa diretório de projeto antigo
 ########################################
 
-echo "📁 Garantindo diretórios locais..."
-mkdir -p data model utils deploy_build
+echo "🧹 Limpando código antigo (preservando .env)..."
+find . -mindepth 1 -maxdepth 1 ! -name '.env' -exec rm -rf {} +
 
 ########################################
-# 5️⃣ Busca o projeto
+# 5️⃣ Sempre clona do GitHub (main branch)
 ########################################
 
-if [ -f projeto_lstm_acoes_full.zip ]; then
-    echo "🎯 Pacote local encontrado."
-else
-    echo "☁️ Buscando do S3 (se existir)..."
-    aws s3 cp s3://$BUCKET_NAME/deploys/projeto_lstm_acoes_full.zip . || echo "⚠️ Pacote não encontrado no S3."
-fi
+echo "🌐 Clonando projeto atualizado do GitHub..."
+git clone -b main https://github.com/bru-guimaraes/techchallenge4_bruna.git repo_clone
 
-if [ ! -f projeto_lstm_acoes_full.zip ]; then
-    echo "🌐 Clonando projeto do GitHub..."
-    git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git repo_clone
-    cp -r repo_clone/* .
-    rm -rf repo_clone
-fi
+# Move o conteúdo da pasta clone para o diretório raiz
+mv repo_clone/* .
+mv repo_clone/.* . 2>/dev/null || true
+rm -rf repo_clone
 
-echo "📦 Descompactando..."
-unzip -o projeto_lstm_acoes_full.zip
+echo "✅ Código atualizado a partir do GitHub"
 
 ########################################
 # 6️⃣ Valida Docker
@@ -99,10 +92,10 @@ python3 data/coleta.py
 python3 model/treino_modelo.py
 
 ########################################
-# 8️⃣ Reinicia Docker container
+# 8️⃣ Builda e reinicia o container Docker
 ########################################
 
-echo "🐳 Subindo Docker..."
+echo "🐳 Subindo Docker atualizado..."
 docker stop lstm-app-container || true
 docker rm lstm-app-container || true
 docker rmi lstm-app || true
@@ -112,4 +105,4 @@ docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 docker ps
 
-echo "✅ FULL DEPLOY finalizado com sucesso!"
+echo "✅ FULL DEPLOY FINALIZADO COM SUCESSO!"
