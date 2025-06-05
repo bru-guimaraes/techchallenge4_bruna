@@ -1,147 +1,149 @@
-# Tech Challenge 4 - Pipeline LSTM Previsao de Acoes (AWS + EC2 + FastAPI + DuckDNS)
+# Tech Challenge 4 - MLET - Previsão de Preço de Ações com LSTM
+
+Projeto completo de coleta, processamento, treinamento e deploy de modelo LSTM para previsão de preço de ações.
+
+## Visão Geral
+
+* Coleta resiliente de dados financeiros (Yahoo Finance + Alpha Vantage + Mock)
+* Processamento e normalização dos dados
+* Treinamento de modelo LSTM
+* Deploy automatizado no EC2 (AWS)
+* Atualização automática de IP no DuckDNS
+* Gerenciamento automatizado de credenciais temporárias AWS
 
 ---
 
-## Visao Geral
+## Arquitetura
 
-Este projeto implementa um pipeline completo de coleta, treino e deploy de um modelo LSTM de previsao de precos de acoes, utilizando:
-
-* **AWS EC2** (com armazenamento em disco adicional)
-* **S3 (quando disponivel)**
-* **GitHub (backup de seguranca)**
-* **Alpha Vantage e Yahoo Finance (para coleta de dados)**
-* **FastAPI com deploy Dockerizado**
-* **DuckDNS (para exposicao publica automatica)**
-* **Auto atualizacao de credenciais AWS temporarias e IP dinamico**
+* **Backend:** FastAPI
+* **ML:** Tensorflow + LSTM
+* **AWS:** EC2 + S3
+* **DNS:** DuckDNS
+* **CI Local:** Powershell para build
+* **CI EC2:** Shell Scripts automatizados
 
 ---
 
-## Funcionalidades Implementadas
+## Repositório
 
-* ✅ Coleta de dados de acoes (tenta YFinance, fallback Alpha Vantage, fallback Mock)
-* ✅ Treinamento e normalizacao dos dados (com janela de 60 dias)
-* ✅ Salvamento do modelo e scaler no S3
-* ✅ Build automatico no Windows com Powershell
-* ✅ Deploy completo no EC2 com um unico `full_deploy.sh`
-* ✅ Atualizacao automatica de credenciais AWS e IP dinamico com `auto_env.py`
-* ✅ Integracao com DuckDNS (substitui IP dinamico por dominio fixo)
-* ✅ Busca de ultima versao de codigo (prioridade: ZIP local > S3 > GitHub)
+> [https://github.com/bru-guimaraes/techchallenge4\_bruna](https://github.com/bru-guimaraes/techchallenge4_bruna)
 
 ---
 
-## Estrutura do Projeto
+## Configuração Inicial
 
+### 1. Criar o .env (NÃO VERSIONADO)
+
+Esse arquivo é sensível e não vai para o Git.
+
+```env
+# AWS (deixar vazio pois é gerado via auto_env)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_SESSION_TOKEN=
+AWS_DEFAULT_REGION=us-east-1
+
+# S3
+BUCKET_NAME=bdadostchallengebruna
+MODEL_KEY=modelos/model_lstm.h5
+SCALER_KEY=modelos/scaler.gz
+
+# EC2
+EC2_IP=
+EC2_USER=ec2-user
+PEM_PATH=D:/caminho/bruna-techchallenge.pem
+
+# Alpha Vantage
+ALPHA_VANTAGE_API_KEY=L2MMCXP58F5Y5F9K
+
+# DuckDNS
+DUCKDNS_DOMAIN=techchallenge4brunag
+DUCKDNS_TOKEN=c549a1fa-6804-43d5-b4dd-ebaea080834f
 ```
-├── app/
-│   └── main.py, model_loader.py, schemas.py...
-├── data/
-│   └── coleta.py (pipeline resiliente de coleta de dados)
-├── model/
-│   └── treino_modelo.py
-├── utils/
-│   └── preprocessamento.py
-├── deploy_build/ (gerado no build)
-├── projeto_lstm_acoes_full.zip (pacote gerado para o EC2)
-├── auto_env.py  (auto atualizacao de credenciais)
-├── build_deploy.ps1  (build Windows)
-├── full_deploy.sh  (deploy final EC2)
-├── Dockerfile
-├── .env
-└── README.md
+
+---
+
+### 2. Pipeline de Execução
+
+#### a) Build local (Windows):
+
+```powershell
+./build_deploy.ps1
+```
+
+Ele:
+
+* Coleta dados (Yahoo Finance + Alpha Vantage + Mock)
+* Treina o modelo
+* Gera o .zip
+* Envia via SCP para o EC2
+* Atualiza IP no DuckDNS automaticamente
+
+#### b) Deploy Full no EC2 (SSH no EC2):
+
+```bash
+cd ~/deploy_app
+chmod +x full_deploy.sh
+./full_deploy.sh
+```
+
+Ele:
+
+* Gera novo build no EC2
+* Baixa o repositório do GitHub caso não tenha o ZIP local
+* Atualiza credenciais AWS com o auto\_env
+* Atualiza o IP no DuckDNS
+* Executa rebuild do container Docker
+
+---
+
+## API Online
+
+> A API fica exposta via DuckDNS:
+
+**[https://techchallenge4brunag.duckdns.org/](https://techchallenge4brunag.duckdns.org/)**
+
+### Endpoints:
+
+* `/docs` - Swagger auto gerado
+* `/prever` - Faz previsão
+
+Exemplo de request:
+
+```json
+{
+  "historico": [10,11,12,13,14,15,16,17,18,19,20,...]
+}
 ```
 
 ---
 
-## Fluxo de Execucao
+## Caso o Professor queime minha sessão AWS:
 
-### 1. Build local (Windows / VSCode)
+1. Subir novo EC2 (via AWS Academy)
+2. Clonar o repositório:
 
-* Edite o arquivo `.env` com suas credenciais AWS temporarias, pem, IP, etc.
-* Execute `build_deploy.ps1` no Windows:
+```bash
+git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git
+```
 
-  ```
-  ./build_deploy.ps1
-  ```
-* Ele:
+3. Copiar o .env atualizado para o EC2:
 
-  * Coleta dados
-  * Treina o modelo
-  * Salva no S3
-  * Gera ZIP
-  * Faz o SCP automatico para o EC2
+```bash
+scp -i caminho/chave.pem .env ec2-user@IP_NOVO:/home/ec2-user/deploy_app/
+```
 
-### 2. Deploy no EC2
+4. Rodar o deploy normalmente:
 
-* Conecte-se na instancia EC2 via SSH
-* Acesse a pasta `/home/ec2-user/deploy_app`
-* Execute:
-
-  ```
-  chmod +x full_deploy.sh
-  ./full_deploy.sh
-  ```
-
-O `full_deploy.sh`:
-
-* Atualiza automaticamente o .env com as novas credenciais AWS
-* Atualiza o DuckDNS
-* Faz coleta e treino no proprio EC2
-* Faz rebuild do Docker
-* Sobe a API em 80/tcp
+```bash
+./full_deploy.sh
+```
 
 ---
 
-## Configuracoes do DuckDNS
+## Extras de Resiliência Implementados
 
-* Ja automatizado via `auto_env.py`
-* Sempre atualizado a cada deploy.
-* Exemplo de acesso a API final:
-
-  ```
-  http://techchallenge4brunag.duckdns.org/docs
-  ```
-
----
-
-## Consideracoes importantes:
-
-* As credenciais AWS temporarias mudam a cada sessao da AWS Academy.
-* Use `auto_env.py` para sempre atualizar o .env automaticamente no EC2.
-* O arquivo `.env` NUNCA deve ir para o GitHub. No EC2 ele eh atualizado automaticamente.
-* O EC2 sempre busca primeiro o zip local, depois o S3, depois o GitHub oficial:
-
-  ```
-  https://github.com/bru-guimaraes/techchallenge4_bruna
-  ```
-
----
-
-## Caso o professor queira executar:
-
-1. Ter um usuario IAM na AWS com permissão de leitura S3 (opcional, se desejar utilizar o bucket existente).
-
-2. Criar nova instancia EC2 com permissao de Internet publica.
-
-3. Clonar o projeto via GitHub:
-
-   ```bash
-   git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git
-   ```
-
-4. Preencher o arquivo `.env` no EC2:
-
-   ```bash
-   vi /home/ec2-user/deploy_app/.env
-   ```
-
-5. Rodar o `full_deploy.sh` normalmente.
-
-**A partir desse ponto, o deploy passa a ser totalmente autonomo.**
-
----
-
-## Pipeline 100% resiliente ✅
-
-* Build Windows --> Envia ZIP --> EC2 --> Atualiza credenciais --> Faz coleta --> Treina --> Docker --> API --> Exposicao via DuckDNS
-
----
+* Multi-source de dados: Yahoo Finance > Alpha Vantage > Mock
+* DuckDNS para IP dinâmico
+* Auto-atualização de credenciais temporárias AWS
+* Totalmente reprodutível sem necessidade de Windows local

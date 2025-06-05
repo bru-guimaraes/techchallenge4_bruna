@@ -19,3 +19,4 @@ dependencies:
       - yfinance==0.2.37
       - python-dotenv==1.0.1
       - requests
+      - alpha_vantage

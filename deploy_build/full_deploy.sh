@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão final com environment.yml!"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada!"
 
 ########################################
 # 1️⃣ Valida Miniconda
@@ -14,21 +14,22 @@ if [ ! -f ~/miniconda3/etc/profile.d/conda.sh ]; then
     rm miniconda.sh
 fi
 
-# Só agora podemos dar o source
+# Ativa Conda
 source ~/miniconda3/etc/profile.d/conda.sh
 
 ########################################
-# 2️⃣ Valida environment Conda via environment.yml
+# 2️⃣ Valida environment Conda
 ########################################
 
 if ! conda info --envs | grep -q "lstm-pipeline"; then
     echo "⚠️ Environment lstm-pipeline não encontrado. Criando..."
-    conda env create -f environment.yml
+    conda create -y -n lstm-pipeline python=3.10
+    conda activate lstm-pipeline
+    pip install --upgrade pip
+    pip install -r requirements.txt
 else
-    echo "✅ Environment lstm-pipeline já existe."
+    conda activate lstm-pipeline
 fi
-
-conda activate lstm-pipeline
 
 ########################################
 # 3️⃣ Executa auto_env
@@ -87,8 +88,10 @@ if ! command -v docker &> /dev/null; then
     sudo systemctl enable docker
     sudo systemctl start docker
     sudo usermod -aG docker ec2-user
-    newgrp docker
 fi
+
+# Garante diretório docker externo se quiser usar:
+# sudo mkdir -p /data/docker && sudo chown ec2-user:ec2-user /data/docker
 
 ########################################
 # 7️⃣ Executa pipeline

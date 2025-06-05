@@ -1,77 +1,69 @@
 import boto3
-import os
-import requests
-from dotenv import load_dotenv
+import subprocess
 
-# Carrega o .env atual
-load_dotenv()
+print("🔧 Atualizando variáveis AWS no .env...")
 
-# Atualiza arquivo .env
-def atualizar_env(variaveis):
-    with open(".env", "w") as f:
-        for k, v in variaveis.items():
-            f.write(f"{k}={v}\n")
+# Carrega credenciais atuais da AWS CLI
+aws_access_key = subprocess.getoutput("aws configure get aws_access_key_id").strip()
+aws_secret_key = subprocess.getoutput("aws configure get aws_secret_access_key").strip()
+aws_session_token = subprocess.getoutput("aws configure get aws_session_token").strip()
 
-# Coleta credenciais temporárias
-def obter_credenciais():
-    session = boto3.Session()
-    credentials = session.get_credentials().get_frozen_credentials()
+# Valida
+if not aws_access_key or not aws_secret_key:
+    print("❌ AWS CLI não configurado corretamente. Rode aws configure.")
+    exit(1)
 
-    return {
-        "AWS_ACCESS_KEY_ID": credentials.access_key,
-        "AWS_SECRET_ACCESS_KEY": credentials.secret_key,
-        "AWS_SESSION_TOKEN": credentials.token
-    }
+# Carrega arquivo .env existente
+env_path = ".env"
+try:
+    with open(env_path, "r") as f:
+        linhas = f.readlines()
+except FileNotFoundError:
+    linhas = []
 
-# Captura IP público atual
-def obter_ip_publico():
-    ip = requests.get("https://checkip.amazonaws.com").text.strip()
-    return ip
+# Atualiza variáveis no .env
+novas_linhas = []
+chaves_processadas = set()
 
-# Atualiza DuckDNS
-def atualizar_duckdns(domain, token, ip):
-    url = f"https://www.duckdns.org/update?domains={domain}&token={token}&ip={ip}"
-    response = requests.get(url)
-    if response.status_code == 200 and "OK" in response.text:
-        print("✅ DuckDNS atualizado com sucesso.")
+for linha in linhas:
+    if linha.startswith("AWS_ACCESS_KEY_ID="):
+        novas_linhas.append(f"AWS_ACCESS_KEY_ID={aws_access_key}\n")
+        chaves_processadas.add("AWS_ACCESS_KEY_ID")
+    elif linha.startswith("AWS_SECRET_ACCESS_KEY="):
+        novas_linhas.append(f"AWS_SECRET_ACCESS_KEY={aws_secret_key}\n")
+        chaves_processadas.add("AWS_SECRET_ACCESS_KEY")
+    elif linha.startswith("AWS_SESSION_TOKEN="):
+        novas_linhas.append(f"AWS_SESSION_TOKEN={aws_session_token}\n")
+        chaves_processadas.add("AWS_SESSION_TOKEN")
+    elif linha.startswith("USE_S3="):
+        novas_linhas.append("USE_S3=true\n")
+        chaves_processadas.add("USE_S3")
+    elif linha.startswith("ALPHAVANTAGE_API_KEY="):
+        novas_linhas.append("ALPHAVANTAGE_API_KEY=L2MMCXP58F5Y5F9K\n")
+        chaves_processadas.add("ALPHAVANTAGE_API_KEY")
     else:
-        print(f"❌ Falha ao atualizar DuckDNS: {response.text}")
+        novas_linhas.append(linha)
 
-# -------- EXECUÇÃO PRINCIPAL --------
+# Adiciona variáveis que não existiam ainda
+if "AWS_ACCESS_KEY_ID" not in chaves_processadas:
+    novas_linhas.append(f"AWS_ACCESS_KEY_ID={aws_access_key}\n")
 
-print("🔐 Buscando novas credenciais AWS temporárias...")
-novas_credenciais = obter_credenciais()
+if "AWS_SECRET_ACCESS_KEY" not in chaves_processadas:
+    novas_linhas.append(f"AWS_SECRET_ACCESS_KEY={aws_secret_key}\n")
 
-print("🌐 Capturando IP público atual...")
-ip_publico = obter_ip_publico()
+if "AWS_SESSION_TOKEN" not in chaves_processadas:
+    novas_linhas.append(f"AWS_SESSION_TOKEN={aws_session_token}\n")
 
-# Carrega variáveis fixas do .env atual
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-MODEL_KEY = os.getenv("MODEL_KEY")
-SCALER_KEY = os.getenv("SCALER_KEY")
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
-PEM_PATH = os.getenv("PEM_PATH")
-DUCKDNS_DOMAIN = os.getenv("DUCKDNS_DOMAIN")
-DUCKDNS_TOKEN = os.getenv("DUCKDNS_TOKEN")
+if "USE_S3" not in chaves_processadas:
+    novas_linhas.append("USE_S3=true\n")
 
-# Atualiza .env com tudo
-variaveis = {
-    **novas_credenciais,
-    "AWS_DEFAULT_REGION": "us-east-1",
-    "BUCKET_NAME": BUCKET_NAME,
-    "MODEL_KEY": MODEL_KEY,
-    "SCALER_KEY": SCALER_KEY,
-    "ALPHA_VANTAGE_API_KEY": ALPHA_VANTAGE_API_KEY,
-    "EC2_IP": ip_publico,
-    "EC2_USER": "ec2-user",
-    "PEM_PATH": PEM_PATH,
-    "DUCKDNS_DOMAIN": DUCKDNS_DOMAIN,
-    "DUCKDNS_TOKEN": DUCKDNS_TOKEN
-}
+if "ALPHAVANTAGE_API_KEY" not in chaves_processadas:
+    novas_linhas.append("ALPHAVANTAGE_API_KEY=L2MMCXP58F5Y5F9K\n")
 
-atualizar_env(variaveis)
-print("✅ .env atualizado com novas credenciais e IP!")
+# EC2_IP permanece manual, como você já controla.
 
-# Atualiza o DuckDNS
-if DUCKDNS_DOMAIN and DUCKDNS_TOKEN:
-    atualizar_duckdns(DUCKDNS_DOMAIN, DUCKDNS_TOKEN, ip_publico)
+# Escreve .env atualizado
+with open(env_path, "w") as f:
+    f.writelines(novas_linhas)
+
+print("✅ Variáveis .env atualizadas com sucesso!")
