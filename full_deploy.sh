@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando FULL DEPLOY no EC2 - versão universal e definitiva"
+echo "🚀 Iniciando FULL DEPLOY no EC2 - versão robusta com ativação explícita"
 
 # --- CRIA DIRETÓRIO NO VOLUME GRANDE SE NÃO EXISTIR ---
 if [ ! -d "/mnt/data/techchallenge4_bruna" ]; then
@@ -39,14 +39,14 @@ else
     echo "✅ Miniconda já instalado"
 fi
 
-# --- GARANTE QUE O CONDA ESTÁ ATIVADO NO CONTEXTO DO SCRIPT ---
+# --- GARANTE QUE O CONDA ESTÁ ATIVADO ---
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate base
 export PATH="$HOME/miniconda3/bin:$PATH"
 
 # --- INSTALA MAMBA (caso não tenha) ---
 if ! command -v mamba &> /dev/null; then
-    echo "🚀 Instalando mamba (mais rápido que conda puro)..."
+    echo "🚀 Instalando mamba..."
     conda install -n base -c conda-forge mamba -y
 else
     echo "✅ Mamba já instalado"
@@ -61,14 +61,20 @@ else
     mamba env create -f environment.yml
 fi
 
-# --- ATIVA ENVIRONMENT ---
-echo "✅ Ativando o environment lstm-pipeline"
-conda activate lstm-pipeline
-
-# --- EXECUTA PIPELINE DE COLETA E TREINO (com conda run para garantir ambiente) ---
+# --- EXECUTA PIPELINE DE COLETA E TREINO dentro de subshell ativando ambiente ---
 echo "📥 Executando coleta de dados e treino de modelo..."
-conda run -n lstm-pipeline python data/coleta.py
-conda run -n lstm-pipeline python model/treino_modelo.py
+
+(
+  source ~/miniconda3/etc/profile.d/conda.sh
+  conda activate lstm-pipeline
+
+  echo "Python usado: $(which python)"
+  echo "Pacotes instalados:"
+  python -m pip list
+
+  python data/coleta.py
+  python model/treino_modelo.py
+)
 
 # --- DOCKER BUILD ---
 echo "🐳 (Re)subindo aplicação Docker..."
