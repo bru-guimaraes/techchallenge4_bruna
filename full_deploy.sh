@@ -45,7 +45,7 @@ conda activate base
 export PATH="$HOME/miniconda3/bin:$PATH"
 
 # --- INSTALA MAMBA (caso não tenha) ---
-if ! conda list | grep -q mamba; then
+if ! command -v mamba &> /dev/null; then
     echo "🚀 Instalando mamba (mais rápido que conda puro)..."
     conda install -n base -c conda-forge mamba -y
 else
@@ -55,7 +55,7 @@ fi
 # --- ATUALIZA OU CRIA O ENVIRONMENT lstm-pipeline ---
 if conda info --envs | grep -q lstm-pipeline; then
     echo "⚠️ Ambiente lstm-pipeline já existe, atualizando..."
-    mamba env update -n lstm-pipeline -f environment.yml
+    mamba env update -n lstm-pipeline -f environment.yml --prune
 else
     echo "🚧 Criando o environment lstm-pipeline..."
     mamba env create -f environment.yml
