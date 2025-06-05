@@ -41,8 +41,7 @@ fi
 
 # --- GARANTE QUE O CONDA ESTÁ ATIVADO NO CONTEXTO DO SCRIPT ---
 source ~/miniconda3/etc/profile.d/conda.sh
-
-# --- GARANTE QUE O BINÁRIO DO MAMBA ESTÁ NO PATH ---
+conda activate base
 export PATH="$HOME/miniconda3/bin:$PATH"
 
 # --- INSTALA MAMBA (caso não tenha) ---
