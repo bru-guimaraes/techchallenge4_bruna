@@ -1,21 +1,23 @@
 name: lstm-pipeline
 channels:
+  - conda-forge/label/main
   - conda-forge
   - defaults
 dependencies:
   - python=3.10
-  - numpy=1.26.4
-  - pandas=2.2.2
-  - scikit-learn=1.3.2
-  - tensorflow=2.15.0
-  # outras libs que condas fornecem
-
+  - numpy
+  - pandas
+  - tensorflow
+  - joblib
+  - pyarrow
+  - fastapi
+  - uvicorn
+  - pydantic
+  - python-dotenv
+  - requests
   - pip
   - pip:
-    - boto3==1.34.103
-    - fastapi==0.115.1
-    - uvicorn[standard]==0.34.1
-    - yfinance==0.2.37
-    - python-dotenv==1.0.1
-    - alpha_vantage
-    - requests
+      - boto3
+      - scikit-learn==1.3.2
+      - yfinance
+      - alpha_vantage
