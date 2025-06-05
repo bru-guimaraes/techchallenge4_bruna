@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Garantir que miniconda esteja sempre no PATH em qualquer shell
+export PATH="$HOME/miniconda3/bin:$PATH"
+
 echo "🚀 Iniciando FULL DEPLOY no EC2 - versão blindada e definitiva"
 
 # Garantir git instalado
@@ -10,12 +13,12 @@ if ! command -v git &> /dev/null; then
     sudo yum install git -y
 fi
 
-# Atualização automática via git pull
+# Auto-atualização via git pull
 echo "🔄 Atualizando projeto com git pull..."
 git pull
 echo "✅ Repositório local atualizado."
 
-# Garantir Miniconda instalado
+# Instalar Miniconda caso ainda não exista
 if [ ! -f ~/miniconda3/etc/profile.d/conda.sh ]; then
     echo "⚠️ Miniconda não encontrado. Instalando..."
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -25,24 +28,24 @@ fi
 
 source ~/miniconda3/etc/profile.d/conda.sh
 
-# Instalar Mamba (resolver turbo)
+# Instalar Mamba turbo resolver
 if ! conda list -n base | grep mamba &> /dev/null; then
     echo "⚙️ Instalando mamba..."
     conda install -n base -c conda-forge mamba -y
 fi
 
-# Recriar environment blindado
+# Recriar environment sempre blindado
 echo "♻️ (Re)criando o environment lstm-pipeline..."
 mamba env remove -n lstm-pipeline -y || true
 mamba env create -f environment.yml
 
 conda activate lstm-pipeline
 
-# Atualizar variáveis de ambiente
+# Atualizar variáveis do .env
 echo "📄 Executando auto_env.py..."
 python3 auto_env.py
 
-# Ajusta variáveis adicionais (só se ainda não existem)
+# Ajuste de variáveis adicionais (caso ainda não existam)
 if ! grep -q "USE_S3" .env; then
     echo "USE_S3=true" >> .env
 fi
@@ -64,12 +67,12 @@ if ! command -v docker &> /dev/null; then
     newgrp docker
 fi
 
-# Executar pipeline
+# Executar pipeline completo
 echo "📥 Coletando dados e treinando modelo..."
 python3 data/coleta.py
 python3 model/treino_modelo.py
 
-# Docker build & run
+# Build e restart do Docker
 echo "🐳 Subindo Docker atualizado..."
 docker stop lstm-app-container || true
 docker rm lstm-app-container || true
