@@ -42,6 +42,9 @@ fi
 # --- GARANTE QUE O CONDA ESTÁ ATIVADO NO CONTEXTO DO SCRIPT ---
 source ~/miniconda3/etc/profile.d/conda.sh
 
+# --- GARANTE QUE O BINÁRIO DO MAMBA ESTÁ NO PATH ---
+export PATH="$HOME/miniconda3/bin:$PATH"
+
 # --- INSTALA MAMBA (caso não tenha) ---
 if ! conda list | grep -q mamba; then
     echo "🚀 Instalando mamba (mais rápido que conda puro)..."
