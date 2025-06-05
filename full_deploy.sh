@@ -65,10 +65,10 @@ fi
 echo "✅ Ativando o environment lstm-pipeline"
 conda activate lstm-pipeline
 
-# --- EXECUTA PIPELINE DE COLETA E TREINO ---
+# --- EXECUTA PIPELINE DE COLETA E TREINO (com conda run para garantir ambiente) ---
 echo "📥 Executando coleta de dados e treino de modelo..."
-python data/coleta.py
-python model/treino_modelo.py
+conda run -n lstm-pipeline python data/coleta.py
+conda run -n lstm-pipeline python model/treino_modelo.py
 
 # --- DOCKER BUILD ---
 echo "🐳 (Re)subindo aplicação Docker..."
