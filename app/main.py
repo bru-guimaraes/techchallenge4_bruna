@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 from typing import List
 import numpy as np
 import time
@@ -31,9 +31,10 @@ async def log_request_time(request: Request, call_next):
     return resposta
 
 # ------------------------------------------------------------
-# 3) Schema de entrada: apenas a lista de floats “historico”
+# 3) Schema de entrada: agora inclui ticker e historico (30 floats)
 # ------------------------------------------------------------
 class PrevisaoRequest(BaseModel):
+    ticker: constr(strip_whitespace=True, min_length=1)  # string não vazia
     historico: List[float]
 
 # ------------------------------------------------------------
@@ -77,7 +78,7 @@ def detectar_tendencia(prices: List[float]) -> str:
 def prever(request: PrevisaoRequest):
     WINDOW_SIZE = 30
 
-    # 5.1) Valida que existam pelo menos 30 valores
+    # 5.1) Valida que ticker não seja vazio (já garantido pelo Pydantic) e que tenhamos 30 valores
     if len(request.historico) < WINDOW_SIZE:
         raise HTTPException(
             status_code=400,
@@ -101,15 +102,16 @@ def prever(request: PrevisaoRequest):
         # 5.6) Último preço informado
         ultimo_preco = seq_raw[-1]
 
-        # 5.7) Montar resposta
+        # 5.7) Montar resposta com ticker, último preço, tendência e previsão
         return JSONResponse(
             content={
-                "preco_previsto": f"US$ {pred:.2f}",
+                "ticker": request.ticker.upper(),
                 "ultimo_preco": f"US$ {ultimo_preco:.2f}",
+                "preco_previsto": f"US$ {pred:.2f}",
                 "tendencia": tendencia,
                 "explicacao": (
-                    f"Valor estimado de fechamento da ação para o próximo dia "
-                    f"usando os últimos {WINDOW_SIZE} valores. "
+                    f"Para o ticker '{request.ticker.upper()}', usamos os últimos "
+                    f"{WINDOW_SIZE} valores para estimar o próximo preço. "
                     f"Classificado como '{tendencia}'."
                 )
             }
