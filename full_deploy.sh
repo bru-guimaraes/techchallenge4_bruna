@@ -74,14 +74,6 @@ fi
 echo "🟢 Ativando ambiente lstm-pipeline..."
 conda activate lstm-pipeline
 
-# --- Instala dependências pip ---
-if [ -f requirements.txt ]; then
-  echo "📦 Instalando dependências pip..."
-  pip install -r requirements.txt
-else
-  echo "⚠️ Arquivo requirements.txt não encontrado, pulando instalação pip."
-fi
-
 # --- Executa pipeline do projeto: coleta e treino ---
 echo "📥 Executando coleta de dados (data/coleta.py)..."
 python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
