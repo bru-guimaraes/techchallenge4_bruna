@@ -5,20 +5,21 @@ import os
 import time
 import subprocess
 
-# Configurações (ajuste se necessário)
+# Configurações
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-NAMESPACE = "Custom/System"  # ou “TechChallenge/LSTM” se preferir
-DIMENSION_NAME = "InstanceId"
+NAMESPACE = "Custom/System"
+DIMENSION_NAME = "InstanceId"  # Ainda tentamos usar, mas caímos no fallback
 
-# Cria o cliente CloudWatch
+# Cria cliente CloudWatch
 cw_client = boto3.client("cloudwatch", region_name=AWS_REGION)
 
 def get_instance_id():
-    """Recupera o ID da instância a partir do metadata do EC2."""
+    """Recupera o ID da instância via metadata. Se falhar, retorna 'unknown'."""
     try:
-        return subprocess.check_output(
+        instance_id = subprocess.check_output(
             ["curl", "-s", "http://169.254.169.254/latest/meta-data/instance-id"]
         ).decode().strip()
+        return instance_id if instance_id else "unknown"
     except Exception:
         return "unknown"
 
@@ -26,8 +27,8 @@ INSTANCE_ID = get_instance_id()
 
 def collect_cpu_usage():
     """
-    Coleta uso de CPU (percentual) em 1 segundo, semelhante ao cálculo via /proc/stat.
-    Retorna uma tupla: (cpu_used_percent, cpu_idle_percent).
+    Coleta uso de CPU (percentual) em 1 segundo, via /proc/stat.
+    Retorna (cpu_used_percent, cpu_idle_percent).
     """
     with open("/proc/stat", "r") as f:
         fields_prev = f.readline().split()[1:]
@@ -37,7 +38,6 @@ def collect_cpu_usage():
         fields_cur = f.readline().split()[1:]
         cpu_cur = list(map(int, fields_cur))
 
-    # Campos: user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice
     total_prev = sum(cpu_prev[:8])
     total_cur = sum(cpu_cur[:8])
     idle_prev = cpu_prev[3]
@@ -55,7 +55,7 @@ def collect_cpu_usage():
 
 def collect_memory_usage():
     """
-    Coleta o percentual de memória usada a partir de /proc/meminfo.
+    Coleta percentual de memória usada via /proc/meminfo.
     Retorna mem_used_percent.
     """
     meminfo = {}
@@ -75,14 +75,11 @@ def collect_memory_usage():
 
 def collect_disk_usage():
     """
-    Coleta o percentual de disco usado na partição root (/). Usa o comando df.
+    Coleta percentual de disco usado na partição root (/) via df.
     Retorna disk_used_percent.
     """
     try:
         output = subprocess.check_output(["df", "--output=pcent", "/"]).decode().splitlines()
-        # Exemplo de output:
-        #  Use%
-        #   23%
         usage_str = output[1].strip().strip("%")
         return float(usage_str)
     except Exception:
@@ -91,32 +88,34 @@ def collect_disk_usage():
 def put_metric(metric_name, value):
     """
     Envia um datapoint para o CloudWatch usando boto3.
+    Se INSTANCE_ID == "unknown", envia sem dimensão; caso contrário, envia com dimensão.
     """
+    metric_data = {
+        "MetricName": metric_name,
+        "Value": value,
+        "Unit": "Percent",
+    }
+
+    # Se tiver um ID válido (> 0 chars), envia como dimensão; senão envia sem dimensão
+    if INSTANCE_ID and INSTANCE_ID != "unknown":
+        metric_data["Dimensions"] = [
+            {"Name": DIMENSION_NAME, "Value": INSTANCE_ID}
+        ]
+
     try:
         cw_client.put_metric_data(
             Namespace=NAMESPACE,
-            MetricData=[
-                {
-                    "MetricName": metric_name,
-                    "Dimensions": [
-                        {"Name": DIMENSION_NAME, "Value": INSTANCE_ID},
-                    ],
-                    "Value": value,
-                    "Unit": "Percent",
-                },
-            ],
+            MetricData=[metric_data]
         )
-        print(f"✅ {metric_name} = {value}% enviado com sucesso.")
+        print(f"✅ {metric_name} = {value}% enviado com sucesso (InstanceId={INSTANCE_ID}).")
     except Exception as e:
         print(f"❌ Erro ao enviar {metric_name}: {e}")
 
 def main():
-    # Coleta métricas
     cpu_used, cpu_idle = collect_cpu_usage()
     mem_used = collect_memory_usage()
     disk_used = collect_disk_usage()
 
-    # Envia métricas
     put_metric("CPU_Utilization", cpu_used)
     put_metric("CPU_Idle", cpu_idle)
     put_metric("Memory_Used_Percent", mem_used)

@@ -135,6 +135,7 @@ python3.10 data/coleta.py || { echo "❌ Erro durante a coleta."; deactivate; ex
 
 echo "📊 Executando treino do modelo..."
 python3.10 model/treino_modelo.py || { echo "❌ Erro durante o treino."; deactivate; exit 1; }
+# Isso gerará model/modelo_lstm.keras e model/scaler.gz
 
 # ----------------------------------------------------
 # 15) Configurar e iniciar o AWS CloudWatch Agent
@@ -168,7 +169,7 @@ fi
 # ----------------------------------------------------
 # 16) Criar e habilitar o systemd service para o CloudWatch Agent
 # ----------------------------------------------------
-echo "🛠️  Configurando o service unit do CloudWatch Agent em systemd..."
+echo "🛠️  Configurando o service unit do CloudWatch Agent em systemd…"
 
 sudo tee /etc/systemd/system/amazon-cloudwatch-agent.service > /dev/null << 'EOF'
 [Unit]
@@ -186,7 +187,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-echo "▶️ Recarregando systemd e habilitando o serviço..."
+echo "▶️ Recarregando systemd e habilitando o serviço…"
 sudo systemctl daemon-reload
 sudo systemctl enable amazon-cloudwatch-agent.service
 sudo systemctl start amazon-cloudwatch-agent.service
@@ -216,21 +217,21 @@ sudo $CLOUDWATCH_BIN -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 # ----------------------------------------------------
 # 18) Executar teste rápido do CloudWatch (opcional)
 # ----------------------------------------------------
-echo "🚀 Testando métrica customizada (se existir)..."
+echo "🚀 Testando métrica customizada (se existir)…"
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Aviso: falha no teste CloudWatch."
 
 # ----------------------------------------------------
 # 19) Parar containers/imagens antigos e construir o Docker
 # ----------------------------------------------------
-echo "🐳 Parando e removendo containers/imagens antigos..."
+echo "🐳 Parando e removendo containers/imagens antigos…"
 docker stop lstm-app-container 2>/dev/null || true
 docker rm   lstm-app-container 2>/dev/null || true
 docker rmi  lstm-app           2>/dev/null || true
 
-echo "🐳 Construindo nova imagem Docker (tag: lstm-app)..."
+echo "🐳 Construindo nova imagem Docker (tag: lstm-app)…"
 docker build -t lstm-app .
 
-echo "🐳 Rodando container Docker (lstm-app-container na porta 80)..."
+echo "🐳 Rodando container Docker (lstm-app-container na porta 80)…"
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY da aplicação concluído com sucesso."
@@ -248,7 +249,15 @@ else
   echo "✅ awscli já instalado."
 fi
 
-# 20.2) Garantir que o script push_metrics.py está executável
+# 20.2) Instalar cronie (para suportar crontab)
+if ! command -v crontab &>/dev/null; then
+  echo "📦 Instalando cronie (para suportar crontab)..."
+  sudo yum install -y cronie
+else
+  echo "✅ cronie (crontab) já instalado."
+fi
+
+# 20.3) Garantir que o script push_metrics.py está executável
 METRICS_SCRIPT="$PROJECT_DIR/push_metrics.py"
 if [ -f "$METRICS_SCRIPT" ]; then
   echo "🔧 Garantindo permissão de execução para $METRICS_SCRIPT..."
@@ -259,11 +268,11 @@ else
   exit 1
 fi
 
-# 20.3) Executa uma vez para enviar métricas imediatamente
+# 20.4) Executa uma vez para enviar métricas imediatamente
 echo "🚀 Executando push_metrics.py pela primeira vez..."
 python3 "$METRICS_SCRIPT" || echo "⚠️ Aviso: falha ao executar $METRICS_SCRIPT agora."
 
-# 20.4) Agendar no cron para rodar a cada 5 minutos (se ainda não estiver agendado)
+# 20.5) Agendar no cron para rodar a cada 5 minutos (se ainda não estiver agendado)
 CRON_ENTRY="*/5 * * * * $METRICS_SCRIPT >> $PROJECT_DIR/push_metrics.log 2>&1"
 ( crontab -l -u ec2-user 2>/dev/null | grep -F "$METRICS_SCRIPT" ) \
   || ( crontab -l -u ec2-user 2>/dev/null; echo "$CRON_ENTRY" ) | crontab -u ec2-user -
