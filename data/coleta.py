@@ -20,6 +20,12 @@ AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
 BUCKET = os.getenv("BUCKET_NAME", "bdadostchallengebruna")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
 
+print(f"Chave Alpha Vantage carregada: {ALPHAVANTAGE_API_KEY}")
+if ALPHAVANTAGE_API_KEY:
+    print("Chave Alpha Vantage configurada.")
+else:
+    print("Chave Alpha Vantage NÃO está configurada.")
+
 df = None
 
 # 1️⃣ Primeiro tenta via yfinance
