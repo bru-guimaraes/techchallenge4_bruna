@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MAMBA e VARIÁVEIS PARAMETRIZADAS"
+echo "🚀 Iniciando FULL DEPLOY"
 
 # --- Variáveis base parametrizáveis ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
@@ -26,6 +26,7 @@ export PATH="$MINICONDA_PATH/bin:$PATH"
 # --- Carrega conda ---
 if [ -f "$MINICONDA_PATH/etc/profile.d/conda.sh" ]; then
   source "$MINICONDA_PATH/etc/profile.d/conda.sh"
+  export PATH="$MINICONDA_PATH/bin:$PATH"  # <-- AQUI O AJUSTE CRÍTICO PARA BLINDAR O MAMBA
 else
   echo "❌ Arquivo conda.sh não encontrado."
   exit 1
