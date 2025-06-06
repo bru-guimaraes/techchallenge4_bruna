@@ -5,7 +5,7 @@ FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
-# 1) Instala ferramentas necessárias para compilar partes nativas
+# 1) Instala ferramentas necessárias para compilar partes nativas (ex.: TensorFlow)
 RUN apt-get update && apt-get install -y \
       build-essential \
       gcc \
@@ -13,14 +13,15 @@ RUN apt-get update && apt-get install -y \
       libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2) Copia apenas requirements.txt (menos dados no contexto)
+# 2) Copia apenas requirements.txt (assim o contexto de build fica menor)
 COPY requirements.txt .
 
-# 3) Faz pip não gerar cache
+# 3) Define variáveis para pip não criar cache em /root/.cache
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1
 
 # 4) Instala só as libs que precisamos para rodar a inferência
+#    Incluímos scikit-learn para poder carregar o scaler
 RUN pip install --upgrade pip && \
     pip install \
       --no-cache-dir \
@@ -30,7 +31,8 @@ RUN pip install --upgrade pip && \
         "uvicorn[standard]==0.34.1" \
         pydantic==2.11.5 \
         boto3==1.34.103 \
-        joblib==1.3.2
+        joblib==1.3.2 \
+        scikit-learn==1.3.2
 
 # ───────────────────────────────────────────────────────
 # ETAPA 2: RUNTIME (imagem enxuta, só rodar a API + modelo)
@@ -50,7 +52,7 @@ COPY app/   ./app/
 COPY model/ ./model/
 COPY requirements.txt .
 
-# 4) Limpa caches para liberar espaço
+# 4) Limpa caches do apt e do pip para liberar espaço
 RUN rm -rf /var/lib/apt/lists/* /root/.cache
 
 # 5) Expõe a porta 80
