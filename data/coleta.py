@@ -24,7 +24,9 @@ try:
     df = yf.download(ATIVO, period="1y", interval="1d")
     if df.empty:
         raise ValueError("Sem dados no yfinance.")
-    df.reset_index(inplace=True)
+    df.reset_index(inplace=True)  # garante 'Date' como coluna
+    if 'Date' not in df.columns and 'date' in df.columns:
+        df.rename(columns={'date': 'Date'}, inplace=True)
     print("✅ Dados coletados via yfinance.")
 except Exception as e:
     print(f"⚠ Erro no yfinance: {e}")
@@ -37,7 +39,7 @@ if df is None and ALPHAVANTAGE_API_KEY:
         ts = TimeSeries(key=ALPHAVANTAGE_API_KEY, output_format='pandas')
         data, meta = ts.get_daily(symbol=ATIVO, outputsize='compact')
         data.reset_index(inplace=True)
-        # Faz a renomeação das colunas para padronizar com o formato do yfinance
+        # Renomear colunas para padronizar com yfinance
         data.rename(columns={
             "date": "Date",
             "1. open": "Open",

@@ -44,15 +44,18 @@ else:
         raise FileNotFoundError(f"Arquivo {ARQUIVO_LOCAL} não encontrado para treinamento.")
     df = pd.read_parquet(ARQUIVO_LOCAL)
 
-# Pré-processamento (agora sempre seguro com 'Close')
+# Garantir que a coluna 'Date' existe e está no formato datetime
+if 'Date' not in df.columns and 'date' in df.columns:
+    df.rename(columns={'date': 'Date'}, inplace=True)
+
+df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 df.sort_values(by="Date", inplace=True)
 df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
-df.dropna(inplace=True)
+df.dropna(subset=['Date', 'Close'], inplace=True)
 
 scaler = MinMaxScaler()
 df['Close_Scaled'] = scaler.fit_transform(df[['Close']])
 
-# Sequência para LSTM
 def criar_sequencias(series, janela):
     X, y = [], []
     for i in range(len(series) - janela):
