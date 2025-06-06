@@ -1,46 +1,43 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MAMBA/CONDA e VARIÁVEIS PARAMETRIZADAS"
+echo "🚀 Iniciando FULL DEPLOY SIMPLIFICADO usando venv + pip"
 
-# --- Variáveis base parametrizáveis ---
+# --- Definições de caminhos ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
-MINICONDA_PATH="${MINICONDA_PATH:-$BASE_PATH/miniconda3}"
 PROJECT_DIR="${PROJECT_DIR:-$BASE_PATH/techchallenge4_bruna}"
-CLOUDWATCH_DIR="${CLOUDWATCH_DIR:-$BASE_PATH/amazon-cloudwatch-agent}"
+VENV_DIR="$BASE_PATH/venv"
+CLOUDWATCH_DIR="$BASE_PATH/amazon-cloudwatch-agent"
 CLOUDWATCH_BIN="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
 
 echo "🔧 Diretórios configurados:"
-echo "  - Miniconda:  $MINICONDA_PATH"
 echo "  - Projeto:    $PROJECT_DIR"
+echo "  - Virtualenv: $VENV_DIR"
 echo "  - CloudWatch: $CLOUDWATCH_DIR"
 
-# --- Verifica Miniconda instalada ---
-if [ ! -d "$MINICONDA_PATH" ]; then
-  echo "❌ Miniconda não encontrada em $MINICONDA_PATH."
+# --- 1) Verifica se Python3 e venv estão disponíveis ---
+if ! command -v python3 &>/dev/null; then
+  echo "❌ Python3 não encontrado. Instale python3 e python3-venv e tente novamente."
   exit 1
 fi
 
-export PATH="$MINICONDA_PATH/bin:$PATH"
-
-# --- Carrega conda para habilitar conda e funções ---
-if [ -f "$MINICONDA_PATH/etc/profile.d/conda.sh" ]; then
-  source "$MINICONDA_PATH/etc/profile.d/conda.sh"
-  export PATH="$MINICONDA_PATH/bin:$PATH"
+# --- 2) Criar (ou reusar) a virtualenv em $VENV_DIR ---
+if [ ! -d "$VENV_DIR" ]; then
+  echo "♻️ Criando virtualenv em $VENV_DIR..."
+  python3 -m venv "$VENV_DIR"
 else
-  echo "❌ Arquivo conda.sh não encontrado em $MINICONDA_PATH/etc/profile.d/"
-  exit 1
+  echo "✅ Virtualenv já existe em $VENV_DIR, pulando criação."
 fi
 
-# --- Verifica e instala mamba se faltar ---
-echo "🔎 Verificando mamba..."
-if command -v mamba &>/dev/null; then
-  echo "✅ Mamba já instalado."
-else
-  echo "⚠️ mamba não encontrado; será usado conda para criar ambiente."
-fi
+# Ativar a venv nesta sessão
+source "$VENV_DIR/bin/activate"
 
-# --- Verifica Docker instalado e ativo ---
+# --- 3) Instalar/atualizar pacotes via pip ---
+echo "📦 Instalando dependências Python..."
+pip install --upgrade pip
+pip install -r "$PROJECT_DIR/requirements.txt"
+
+# --- 4) Verifica Docker (instale se faltar) ---
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker não instalado. Instale Docker e rode novamente."
   exit 1
@@ -55,48 +52,28 @@ if ! systemctl is-active --quiet docker; then
     exit 1
   fi
 fi
+echo "✅ Docker está ativo."
 
-echo "✅ Docker está instalado e ativo."
-
-# --- Atualiza repositório local ---
-if [ ! -d "$PROJECT_DIR" ]; then
-  echo "❌ Diretório do projeto $PROJECT_DIR não encontrado."
-  exit 1
-fi
-
+# --- 5) Atualiza repositório local ---
 cd "$PROJECT_DIR"
 echo "🔄 Atualizando repositório local..."
 git fetch --all
 git reset --hard origin/main
 echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 
-# --- Criar ou verificar ambiente conda 'lstm-pipeline' ---
-echo "♻️ Verificando ambiente conda lstm-pipeline..."
-if conda env list | awk '{ print $1 }' | grep -qx "lstm-pipeline"; then
-  echo "✅ Ambiente 'lstm-pipeline' já existe. Pulando criação."
-else
-  if command -v mamba &>/dev/null; then
-    echo "♻️ Ambiente 'lstm-pipeline' não encontrado. Criando com mamba…"
-    mamba env create -f environment.yml
-  else
-    echo "⚠️ mamba não disponível; criando com conda…"
-    conda env create -f environment.yml
-  fi
-fi
+# --- 6) Executa coleta de dados e treino usando a venv ---
+echo "📥 Executando coleta de dados (data/coleta.py)..."
+python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
 
-# --- Executa pipeline do projeto: coleta e treino ---
-echo "📥 Executando coleta de dados…"
-conda run -n lstm-pipeline python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
+echo "📊 Executando treino de modelo (model/treino_modelo.py)..."
+python model/treino_modelo.py || { echo "❌ Erro no treino de modelo"; exit 1; }
 
-echo "📊 Executando treino de modelo…"
-conda run -n lstm-pipeline python model/treino_modelo.py || { echo "❌ Erro no treino de modelo"; exit 1; }
-
-# --- CloudWatch Agent ---
-echo "🚀 Verificando AWS CloudWatch Agent…"
+# --- 7) Instalar/configurar AWS CloudWatch Agent (opcional) ---
+echo "🚀 Verificando AWS CloudWatch Agent..."
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado em $CLOUDWATCH_BIN"
 else
-  echo "⚠️ CloudWatch Agent não encontrado. Instalando no volume maior…"
+  echo "⚠️ CloudWatch Agent não encontrado. Instalando no volume..."
   mkdir -p "$CLOUDWATCH_DIR"
   cd "$CLOUDWATCH_DIR"
   wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
@@ -105,7 +82,7 @@ else
   echo "✅ CloudWatch Agent instalado em $CLOUDWATCH_DIR"
 fi
 
-# Copia a configuração para o diretório do agente
+# Copia a configuração (presume-se que exista cloudwatch-config.json no projeto)
 CONFIG_SRC="$PROJECT_DIR/cloudwatch-config.json"
 CONFIG_DST="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
 
@@ -117,26 +94,28 @@ else
   exit 1
 fi
 
-# Inicia o agente com a configuração personalizada
-echo "▶️ Iniciando CloudWatch Agent…"
+echo "▶️ Iniciando CloudWatch Agent..."
 "$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
-echo "✅ CloudWatch Agent iniciado com sucesso."
+echo "✅ CloudWatch Agent iniciado."
 
-echo "🚀 Executando teste de métrica customizada no CloudWatch…"
-conda run -n lstm-pipeline python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
+echo "🚀 Testando métrica customizada no CloudWatch..."
+python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha no teste CloudWatch."
 echo "✅ Teste CloudWatch finalizado."
 
-# --- Para e remove containers e imagens antigas ---
-echo "🐳 Parando e removendo containers Docker antigos…"
+# --- 8) Parar e limpar containers/imagens antigas ---
+echo "🐳 Parando e removendo containers Docker antigos..."
 docker stop lstm-app-container 2>/dev/null || true
 docker rm lstm-app-container 2>/dev/null || true
 docker rmi lstm-app 2>/dev/null || true
 
-# --- Build e run docker ---
-echo "🐳 Construindo a imagem Docker…"
+# --- 9) Build e run Docker ---
+echo "🐳 Construindo a imagem Docker..."
 docker build -t lstm-app .
 
-echo "🐳 Rodando container Docker…"
+echo "🐳 Rodando container Docker..."
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
+
+# --- 10) Desativa a venv nesta sessão ---
+deactivate
