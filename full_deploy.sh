@@ -41,15 +41,22 @@ python3.10 -m pip install numpy scipy
 echo "📦 Instalando scikit-learn via wheel (--prefer-binary)..."
 python3.10 -m pip install --prefer-binary scikit-learn
 
-# 5) Instalar demais dependências do projeto
-if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-  echo "📦 Instalando demais dependências do projeto (requirements.txt)..."
-  python3.10 -m pip install -r "$PROJECT_DIR/requirements.txt"
+# 5) Ajustar fastparquet no requirements.txt (versão 2024.3.0 não existe no PyPI)
+REQ_FILE="$PROJECT_DIR/requirements.txt"
+if grep -q "fastparquet==2024.3.0" "$REQ_FILE"; then
+  echo "🔄 Substituindo fastparquet==2024.3.0 por fastparquet==2024.2.0 no requirements.txt"
+  sed -i 's|fastparquet==2024.3.0|fastparquet==2024.2.0|g' "$REQ_FILE"
+fi
+
+# 6) Instalar demais dependências do projeto
+if [ -f "$REQ_FILE" ]; then
+  echo "📦 Instalando dependências do projeto (requirements.txt)..."
+  python3.10 -m pip install -r "$REQ_FILE"
 else
   echo "⚠️ requirements.txt não encontrado em $PROJECT_DIR; pulando esta etapa."
 fi
 
-# 6) Verificar Docker
+# 7) Verificar Docker
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker não instalado. Instale o Docker e tente novamente."
   deactivate
@@ -67,21 +74,21 @@ if ! systemctl is-active --quiet docker; then
 fi
 echo "✅ Docker ativo."
 
-# 7) Atualizar repositório local
+# 8) Atualizar repositório local
 cd "$PROJECT_DIR"
 echo "🔄 Atualizando repositório..."
 git fetch --all
 git reset --hard origin/main
 echo "🔄 Código em $(git rev-parse --short HEAD)"
 
-# 8) Executar coleta e treino (já no venv Python 3.10)
+# 9) Executar coleta e treino (já no venv Python 3.10)
 echo "📥 Executando coleta de dados…"
 python3.10 data/coleta.py || { echo "❌ Erro na coleta"; deactivate; exit 1; }
 
 echo "📊 Executando treino…"
 python3.10 model/treino_modelo.py || { echo "❌ Erro no treino"; deactivate; exit 1; }
 
-# 9) Configurar CloudWatch Agent (opcional)
+# 10) Configurar CloudWatch Agent (opcional)
 echo "🚀 Verificando AWS CloudWatch Agent…"
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado."
@@ -113,6 +120,19 @@ echo "✅ CloudWatch Agent iniciado."
 echo "🚀 Testando métrica customizada…"
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha no teste CloudWatch."
 
-# 10) Build e run no Docker
+# 11) Build e run no Docker
 echo "🐳 Parando e limpando containers/imagens antigos…"
-do
+docker stop lstm-app-container 2>/dev/null || true
+docker rm lstm-app-container 2>/dev/null || true
+docker rmi lstm-app 2>/dev/null || true
+
+echo "🐳 Construindo imagem Docker…"
+docker build -t lstm-app .
+
+echo "🐳 Rodando container Docker…"
+docker run -d --name lstm-app-container -p 80:80 lstm-app
+
+echo "✅ FULL DEPLOY concluído com sucesso!"
+
+# 12) Desativa o venv
+deactivate
