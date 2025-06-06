@@ -47,7 +47,9 @@ else
   echo "✅ Virtualenv já existe em $VENV_DIR"
 fi
 
+# ----------------------------------------------------
 # 5) Ativar o venv
+# ----------------------------------------------------
 source "$VENV_DIR/bin/activate"
 
 # ----------------------------------------------------
@@ -79,7 +81,7 @@ python3.10 -m pip install tensorflow==2.15.0 --no-cache-dir
 # ----------------------------------------------------
 REQ_FILE="$PROJECT_DIR/requirements.txt"
 if grep -q "fastparquet==2024.3.0" "$REQ_FILE"; then
-  echo "🔄 Ajustando fastparquet para uma versão existente no PyPI..."
+  echo "🔄 Ajustando fastparquet para uma versão disponível no PyPI..."
   sed -i 's|fastparquet==2024.3.0|fastparquet==2024.2.0|g' "$REQ_FILE"
 fi
 
@@ -94,7 +96,7 @@ else
 fi
 
 # ----------------------------------------------------
-# 12) Garantir que o Docker esteja instalado e rodando
+# 12) Verificar e iniciar Docker
 # ----------------------------------------------------
 echo "🐳 Verificando serviço Docker..."
 if ! command -v docker &>/dev/null; then
@@ -103,7 +105,7 @@ if ! command -v docker &>/dev/null; then
   exit 1
 fi
 
-# Se não estiver ativo, inicia
+# Se o Docker não estiver ativo, inicia-o
 if ! systemctl is-active --quiet docker; then
   echo "⚠️ Docker não ativo, iniciando o serviço..."
   sudo systemctl start docker
@@ -135,21 +137,25 @@ echo "📊 Executando treino do modelo..."
 python3.10 model/treino_modelo.py || { echo "❌ Erro durante o treino."; deactivate; exit 1; }
 
 # ----------------------------------------------------
-# 15) Configurar e iniciar o AWS CloudWatch Agent (sem systemd unit)
+# 15) Configurar e iniciar o AWS CloudWatch Agent
 # ----------------------------------------------------
 echo "🚀 Verificando AWS CloudWatch Agent..."
+
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado em $CLOUDWATCH_DIR."
 else
-  echo "⚠️ Instalando CloudWatch Agent em /opt/aws/amazon-cloudwatch-agent..."
+  echo "⚠️ Instalando CloudWatch Agent em /opt/aws/amazon-cloudwatch-agent…"
+
   # Criar /opt/aws e ajustar permissões
   sudo mkdir -p /opt/aws
   sudo chown "$USER":"$USER" /opt/aws
 
+  # Entrar em /opt/aws, baixar e extrair o RPM
   cd /opt/aws
   wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
   rpm2cpio amazon-cloudwatch-agent.rpm | cpio -idmv
 
+  # Mover a pasta correta e ajustar permissões
   sudo mv opt/aws/amazon-cloudwatch-agent /opt/aws/
   sudo chown -R "$USER":"$USER" "$CLOUDWATCH_DIR"
 
@@ -159,9 +165,41 @@ else
   echo "✅ CloudWatch Agent instalado em $CLOUDWATCH_DIR."
 fi
 
-# Copiar config JSON para local correto
+# ----------------------------------------------------
+# 16) Criar e habilitar o systemd service para o CloudWatch Agent
+# ----------------------------------------------------
+echo "🛠️  Configurando o service unit do CloudWatch Agent em systemd…"
+
+sudo tee /etc/systemd/system/amazon-cloudwatch-agent.service > /dev/null << 'EOF'
+[Unit]
+Description=Amazon CloudWatch Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a run
+ExecStop=/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "▶️ Recarregando systemd e habilitando o serviço…"
+sudo systemctl daemon-reload
+sudo systemctl enable amazon-cloudwatch-agent.service
+sudo systemctl start amazon-cloudwatch-agent.service
+
+# Agora o agente rodará em segundo-plano via service unit
+echo "✅ Service unit do CloudWatch Agent habilitado e iniciado."
+
+# ----------------------------------------------------
+# 17) Copiar config JSON para o local correto e reconectar / restart (opcional)
+# ----------------------------------------------------
 CONFIG_SRC="$PROJECT_DIR/cloudwatch-config.json"
 CONFIG_DST="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+
 if [ -f "$CONFIG_SRC" ]; then
   sudo cp "$CONFIG_SRC" "$CONFIG_DST"
   sudo chown "$USER":"$USER" "$CONFIG_DST"
@@ -171,30 +209,33 @@ else
   exit 1
 fi
 
-echo "▶️ Iniciando CloudWatch Agent..."
-sudo "$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
-echo "✅ CloudWatch Agent iniciado."
+# Se for necessário reiniciar o agente após copiar config:
+echo "▶️ Aplicando configuração (fetch + restart) no CloudWatch Agent via ctl…"
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 
-echo "🚀 Testando métrica customizada (se existir)..."
+# ----------------------------------------------------
+# 18) Executar teste rápido do CloudWatch (opcional)
+# ----------------------------------------------------
+echo "🚀 Testando métrica customizada (se existir)…"
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Aviso: falha no teste CloudWatch."
 
 # ----------------------------------------------------
-# 16) Parar containers/imagens antigos e construir o Docker
+# 19) Parar containers/imagens antigos e construir o Docker
 # ----------------------------------------------------
-echo "🐳 Parando e removendo containers/imagens antigos..."
+echo "🐳 Parando e removendo containers/imagens antigos…"
 docker stop lstm-app-container 2>/dev/null || true
 docker rm   lstm-app-container 2>/dev/null || true
 docker rmi  lstm-app           2>/dev/null || true
 
-echo "🐳 Construindo nova imagem Docker (tag: lstm-app)..."
+echo "🐳 Construindo nova imagem Docker (tag: lstm-app)…"
 docker build -t lstm-app .
 
-echo "🐳 Rodando container Docker (lstm-app-container na porta 80)..."
+echo "🐳 Rodando container Docker (lstm-app-container na porta 80)…"
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
 
 # ----------------------------------------------------
-# 17) Desativar o venv
+# 20) Desativar o venv
 # ----------------------------------------------------
 deactivate
