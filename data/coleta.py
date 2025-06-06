@@ -3,6 +3,9 @@ import pandas as pd
 import yfinance as yf
 from alpha_vantage.timeseries import TimeSeries
 
+# Carrega as variáveis do arquivo .env que deve estar na raiz do projeto
+load_dotenv()
+
 # Ativo a ser coletado
 ATIVO = "AAPL"
 ARQUIVO_LOCAL = f"data/{ATIVO}_fechamento.parquet"
