@@ -10,14 +10,18 @@ from app.model_loader import carregar_modelo, carregar_scaler
 
 app = FastAPI()
 
-# Carrega o modelo e o scaler treinados (janelas de 30)
+# ------------------------------------------------------------
+# 1) Carrega modelo e scaler treinados (janelas de 30)
+# ------------------------------------------------------------
 try:
     modelo = carregar_modelo()
     scaler = carregar_scaler()
 except Exception as e:
     raise RuntimeError(f"❌ Erro ao inicializar a aplicação: {e}")
 
-# Middleware de log de tempo de resposta
+# ------------------------------------------------------------
+# 2) Middleware para log de tempo de resposta
+# ------------------------------------------------------------
 @app.middleware("http")
 async def log_request_time(request: Request, call_next):
     inicio = time.time()
@@ -26,39 +30,90 @@ async def log_request_time(request: Request, call_next):
     print(f"⏱️ {request.method} {request.url.path} demorou {duracao:.3f}s")
     return resposta
 
-# Schema de entrada: apenas “historico”
+# ------------------------------------------------------------
+# 3) Schema de entrada: apenas a lista de floats “historico”
+# ------------------------------------------------------------
 class PrevisaoRequest(BaseModel):
     historico: List[float]
 
+# ------------------------------------------------------------
+# 4) Função auxiliar: detecta tendência em 30 preços
+# ------------------------------------------------------------
+def detectar_tendencia(prices: List[float]) -> str:
+    """
+    Recebe uma lista de exatamente 30 floats (preços).
+    Retorna: "alta", "queda", "volátil" ou "neutro".
+    """
+    arr = np.array(prices, dtype=float)
+    if len(arr) < 30:
+        return "insuficientes"
+
+    primeiro = arr[0]
+    ultimo = arr[-1]
+    if primeiro <= 0:
+        return "volátil"
+
+    diff_pct = (ultimo - primeiro) / primeiro * 100  # variação em %
+    if diff_pct >= 1.0:
+        return "alta"
+    elif diff_pct <= -1.0:
+        return "queda"
+
+    media = np.mean(arr)
+    std = np.std(arr)
+    if media <= 0:
+        return "volátil"
+
+    coef_var = std / media * 100  # coeficiente de variação em %
+    if coef_var > 1.5:
+        return "volátil"
+    else:
+        return "neutro"
+
+# ------------------------------------------------------------
+# 5) Endpoint /prever
+# ------------------------------------------------------------
 @app.post("/prever")
 def prever(request: PrevisaoRequest):
     WINDOW_SIZE = 30
 
-    # 1) Valida que existam pelo menos 30 valores
+    # 5.1) Valida que existam pelo menos 30 valores
     if len(request.historico) < WINDOW_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"É necessário fornecer ao menos {WINDOW_SIZE} valores em 'historico'."
+            detail=f"É necessário fornecer pelo menos {WINDOW_SIZE} valores em 'historico'."
         )
 
     try:
-        # 2) Fatiar apenas os últimos 30 pontos e reshape → (1, 30, 1)
-        seq = np.array(request.historico[-WINDOW_SIZE:], dtype=float).reshape(1, WINDOW_SIZE, 1)
+        # 5.2) Extrair exatamente os últimos 30 preços
+        seq_raw = request.historico[-WINDOW_SIZE:]  # lista de 30 floats
 
-        # 3) Predição normalizada
-        predicao_normalizada = modelo.predict(seq)[0][0]
+        # 5.3) Detectar tendência
+        tendencia = detectar_tendencia(seq_raw)
 
-        # 4) Desnormalizar
-        predicao = scaler.inverse_transform([[predicao_normalizada]])[0][0]
+        # 5.4) Preparar array para o modelo: (1, 30, 1)
+        seq_arr = np.array(seq_raw, dtype=float).reshape(1, WINDOW_SIZE, 1)
 
+        # 5.5) Previsão (normalizada) e desserialização
+        pred_norm = modelo.predict(seq_arr)[0][0]
+        pred = scaler.inverse_transform([[pred_norm]])[0][0]
+
+        # 5.6) Último preço informado
+        ultimo_preco = seq_raw[-1]
+
+        # 5.7) Montar resposta
         return JSONResponse(
             content={
-                "preco_previsto": f"US$ {predicao:.2f}",
+                "preco_previsto": f"US$ {pred:.2f}",
+                "ultimo_preco": f"US$ {ultimo_preco:.2f}",
+                "tendencia": tendencia,
                 "explicacao": (
-                    f"Valor estimado de fechamento da ação para o próximo dia, "
-                    f"usando os últimos {WINDOW_SIZE} valores"
+                    f"Valor estimado de fechamento da ação para o próximo dia "
+                    f"usando os últimos {WINDOW_SIZE} valores. "
+                    f"Classificado como '{tendencia}'."
                 )
             }
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao realizar previsão: {e}")
