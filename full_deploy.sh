@@ -115,8 +115,13 @@ fi
 echo "Iniciando CloudWatch Agent com configuração..."
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
-
 echo "✅ CloudWatch Agent configurado e rodando."
+
+echo "🚀 Executando teste de métrica customizada no CloudWatch..."
+conda activate lstm-pipeline
+python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
+echo "✅ Teste CloudWatch finalizado."
+
 
 # --- Para e remove containers e imagens antigas ---
 echo "🐳 Parando e removendo containers Docker antigos..."
