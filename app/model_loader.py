@@ -7,8 +7,8 @@ from tensorflow.keras.models import load_model
 
 def carregar_modelo():
     """
-    1) Se definidas as vars BUCKET_NAME e MODEL_KEY, baixa do S3 para /app/model/modelo_lstm_<fonte>.keras
-    2) Caso contrário, espera encontrar o arquivo local em /app/model/modelo_lstm_<fonte>.keras
+    1) Se definidas BUCKET_NAME e MODEL_KEY, baixa do S3 para /app/model/<nome_do_arquivo>
+    2) Caso contrário, busca ‘/app/model/modelo_lstm.keras’ (nome local exato)
     """
     bucket = os.getenv("BUCKET_NAME")
     model_key = os.getenv("MODEL_KEY")  # ex.: "model/modelo_lstm_padrao.keras"
@@ -16,11 +16,10 @@ def carregar_modelo():
     os.makedirs(local_dir, exist_ok=True)
 
     if model_key:
-        filename = os.path.basename(model_key)   # ex.: "modelo_lstm_padrao.keras"
+        filename = os.path.basename(model_key)  # “modelo_lstm_padrao.keras” se vier do S3
     else:
-        # Fallback para um nome padrão; ajuste conforme seu "fonte_dados.txt" se precisar dinâmico
-        fonte = "padrao"
-        filename = f"modelo_lstm_{fonte}.keras"
+        # fallback local: usa exatamente o arquivo que existe no repositório
+        filename = "modelo_lstm.keras"
 
     local_model_path = os.path.join(local_dir, filename)
 
@@ -34,10 +33,10 @@ def carregar_modelo():
         except Exception as e:
             raise RuntimeError(f"❌ Erro ao baixar o modelo do S3: {e}")
 
-    # Verifica se o arquivo local existe
+    # Verifica se o arquivo localizado existe
     if not os.path.isfile(local_model_path):
         raise RuntimeError(f"❌ Modelo não encontrado em '{local_model_path}'. "
-                           "Verifique MODEL_KEY/BUCKET_NAME ou copie o .keras para /app/model/.")
+                           "Verifique MODEL_KEY/BUCKET_NAME ou copie ‘modelo_lstm.keras’ para /app/model/.")
 
     # Carrega o modelo com Keras
     try:
@@ -50,8 +49,8 @@ def carregar_modelo():
 
 def carregar_scaler():
     """
-    1) Se definidas as vars BUCKET_NAME e SCALER_KEY, baixa do S3 para /app/model/scaler_<fonte>.gz
-    2) Caso contrário, espera encontrar o arquivo local em /app/model/scaler_<fonte>.gz
+    1) Se definidas BUCKET_NAME e SCALER_KEY, baixa do S3 para /app/model/<nome_do_scaler>
+    2) Caso contrário, busca ‘/app/model/scaler.gz’ (nome local exato)
     """
     bucket = os.getenv("BUCKET_NAME")
     scaler_key = os.getenv("SCALER_KEY")  # ex.: "model/scaler_padrao.gz"
@@ -59,10 +58,10 @@ def carregar_scaler():
     os.makedirs(local_dir, exist_ok=True)
 
     if scaler_key:
-        filename = os.path.basename(scaler_key)  # ex.: "scaler_padrao.gz"
+        filename = os.path.basename(scaler_key)  # “scaler_padrao.gz” se vier do S3
     else:
-        fonte = "padrao"
-        filename = f"scaler_{fonte}.gz"
+        # fallback local: usa exatamente o arquivo presente no repositório
+        filename = "scaler.gz"
 
     local_scaler_path = os.path.join(local_dir, filename)
 
@@ -79,7 +78,7 @@ def carregar_scaler():
     # Verifica se o arquivo local existe
     if not os.path.isfile(local_scaler_path):
         raise RuntimeError(f"❌ Scaler não encontrado em '{local_scaler_path}'. "
-                           "Verifique SCALER_KEY/BUCKET_NAME ou copie o .gz para /app/model/.")
+                           "Verifique SCALER_KEY/BUCKET_NAME ou copie ‘scaler.gz’ para /app/model/.")
 
     # Carrega o scaler com joblib
     try:
