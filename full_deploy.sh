@@ -213,8 +213,6 @@ fi
 echo "▶️ Aplicando configuração (fetch + restart) no CloudWatch Agent..."
 sudo $CLOUDWATCH_BIN -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 
-echo "✅ CloudWatch Agent configurado com o JSON do projeto."
-
 # ----------------------------------------------------
 # 18) Executar teste rápido do CloudWatch (opcional)
 # ----------------------------------------------------
@@ -235,9 +233,44 @@ docker build -t lstm-app .
 echo "🐳 Rodando container Docker (lstm-app-container na porta 80)..."
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
-echo "✅ FULL DEPLOY concluído com sucesso!"
+echo "✅ FULL DEPLOY da aplicação concluído com sucesso."
 
 # ----------------------------------------------------
-# 20) Desativar o venv
+# 20) Configurar envio automático de métricas customizadas
+# ----------------------------------------------------
+echo "🚀 Configurando envio automático de métricas customizadas para o CloudWatch..."
+
+# 20.1) Instalar AWS CLI (caso ainda não esteja)
+if ! command -v aws &>/dev/null; then
+  echo "📦 Instalando awscli via yum..."
+  sudo yum install -y awscli
+else
+  echo "✅ awscli já instalado."
+fi
+
+# 20.2) Garantir que o script push_metrics.py está executável
+METRICS_SCRIPT="$PROJECT_DIR/push_metrics.py"
+if [ -f "$METRICS_SCRIPT" ]; then
+  echo "🔧 Garantindo permissão de execução para $METRICS_SCRIPT..."
+  sudo chmod +x "$METRICS_SCRIPT"
+else
+  echo "❌ ERRO: $METRICS_SCRIPT não encontrado. Verifique o caminho."
+  deactivate
+  exit 1
+fi
+
+# 20.3) Executa uma vez para enviar métricas imediatamente
+echo "🚀 Executando push_metrics.py pela primeira vez..."
+python3 "$METRICS_SCRIPT" || echo "⚠️ Aviso: falha ao executar $METRICS_SCRIPT agora."
+
+# 20.4) Agendar no cron para rodar a cada 5 minutos (se ainda não estiver agendado)
+CRON_ENTRY="*/5 * * * * $METRICS_SCRIPT >> $PROJECT_DIR/push_metrics.log 2>&1"
+( crontab -l -u ec2-user 2>/dev/null | grep -F "$METRICS_SCRIPT" ) \
+  || ( crontab -l -u ec2-user 2>/dev/null; echo "$CRON_ENTRY" ) | crontab -u ec2-user -
+
+echo "✅ push_metrics.py agendado via cron (a cada 5 minutos)."
+
+# ----------------------------------------------------
+# 21) Desativar o venv
 # ----------------------------------------------------
 deactivate

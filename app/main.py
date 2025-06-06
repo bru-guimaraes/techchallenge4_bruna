@@ -10,7 +10,7 @@ from app.model_loader import carregar_modelo, carregar_scaler
 
 app = FastAPI()
 
-# Carrega modelo e scaler treinados para “AAPL” (ou outro ativo fixo)
+# Carrega o modelo e o scaler treinados (janelas de 30)
 try:
     modelo = carregar_modelo()
     scaler = carregar_scaler()
@@ -32,23 +32,32 @@ class PrevisaoRequest(BaseModel):
 
 @app.post("/prever")
 def prever(request: PrevisaoRequest):
-    # Valida que 60 valores estejam presentes
-    if len(request.historico) < 60:
+    WINDOW_SIZE = 30
+
+    # 1) Valida que existam pelo menos 30 valores
+    if len(request.historico) < WINDOW_SIZE:
         raise HTTPException(
             status_code=400,
-            detail="É necessário fornecer ao menos 60 valores em 'historico'."
+            detail=f"É necessário fornecer ao menos {WINDOW_SIZE} valores em 'historico'."
         )
 
     try:
-        # Usa somente os últimos 60 pontos de historico
-        entrada = np.array(request.historico[-60:]).reshape(1, 60, 1)
-        predicao_normalizada = modelo.predict(entrada)[0][0]
+        # 2) Fatiar apenas os últimos 30 pontos e reshape → (1, 30, 1)
+        seq = np.array(request.historico[-WINDOW_SIZE:], dtype=float).reshape(1, WINDOW_SIZE, 1)
+
+        # 3) Predição normalizada
+        predicao_normalizada = modelo.predict(seq)[0][0]
+
+        # 4) Desnormalizar
         predicao = scaler.inverse_transform([[predicao_normalizada]])[0][0]
 
         return JSONResponse(
             content={
                 "preco_previsto": f"US$ {predicao:.2f}",
-                "explicacao": "Valor estimado de fechamento da ação para o próximo dia com base nos dados fornecidos"
+                "explicacao": (
+                    f"Valor estimado de fechamento da ação para o próximo dia, "
+                    f"usando os últimos {WINDOW_SIZE} valores"
+                )
             }
         )
     except Exception as e:

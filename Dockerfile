@@ -18,13 +18,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # ----------------------------------------------------
-# 3) Crie a pasta onde o modelo e o scaler ficarão (mesmo que vazia por ora)
+# 3) Crie a pasta onde o modelo e o scaler ficarão
 # ----------------------------------------------------
-RUN mkdir -p /app/modelos
+RUN mkdir -p /app/model
 
 # ----------------------------------------------------
 # 4) Copiar todo o código-fonte (incluindo
-#    application.py, app/, modelos/, requirements.txt etc.)
+#    app/, model/, requirements.txt etc.)
 # ----------------------------------------------------
 COPY . .
 
@@ -58,6 +58,6 @@ EXPOSE 80
 
 # ----------------------------------------------------
 # 8) Comando de inicialização: Uvicorn usando
-#    application:application (conforme seu application.py)
+#    app.main:app (conforme seu app/main.py)
 # ----------------------------------------------------
-CMD ["uvicorn", "application:application", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
