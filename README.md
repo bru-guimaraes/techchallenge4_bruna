@@ -67,11 +67,11 @@ Em uma máquina Linux (Amazon Linux 2023 ou similar) ou EC2 nova, é necessário
 
 Instalação passo a passo:
 
-1. Instalar Git
+a. Instalar Git
    sudo yum update -y
    sudo yum install git -y
 
-2. Instalar Python 3.10 (compilando, pois não existe pacote pronto em AL2023)
+b. Instalar Python 3.10 (compilando, pois não existe pacote pronto em AL2023)
    sudo dnf update -y
    sudo dnf install -y gcc gcc-c++ make wget openssl-devel libffi-devel bzip2-devel zlib-devel xz-devel
    cd /usr/src
@@ -91,25 +91,13 @@ Instalação passo a passo:
    python3.10 --version
    pip3.10 --version
 
-3. Instalar Docker
+c. Instalar Docker
    sudo dnf install docker -y
    sudo systemctl enable --now docker
    sudo usermod -aG docker ec2-user
    exit (relogue via SSH)
 
-4. (Opcional) Instalar Miniconda / Mamba para testes locais
-   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O Miniconda3.sh
-   bash Miniconda3.sh -b -p /mnt/ebs100/miniconda3
-   rm Miniconda3.sh
-   export PATH="/mnt/ebs100/miniconda3/bin:$PATH"
-   source /mnt/ebs100/miniconda3/etc/profile.d/conda.sh
-   conda init
-   source ~/.bashrc
-   conda install -n base -c conda-forge mamba -y
-
----
-
-Arquivo .env
+5. Arquivo .env
 
 Crie um arquivo chamado .env na raiz do projeto (não versionar). Exemplo:
 
@@ -190,5 +178,4 @@ Exemplo:
 
 # Link do Vídeo Explicativo
 
-<INSERIR_AQUI_LINK_DO_VÍDEO>
-"""
+https://youtu.be/JStHXJGLl1I
