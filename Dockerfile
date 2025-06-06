@@ -1,11 +1,11 @@
 # ───────────────────────────────────────────────────────
-# ETAPA 1: BUILDER (instala tudo em /deps sem poluir o runtime)
+# ETAPA 1: BUILDER (instala tudo em /build/deps sem poluir o runtime)
 # ───────────────────────────────────────────────────────
 FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
-# 1. Instala apenas o que for necessário para compilar algumas wheels (ex.: TensorFlow)
+# 1) Instala ferramentas necessárias para compilar partes nativas
 RUN apt-get update && apt-get install -y \
       build-essential \
       gcc \
@@ -13,14 +13,14 @@ RUN apt-get update && apt-get install -y \
       libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Copia apenas o requirements.txt para reduzir contexto de build
+# 2) Copia apenas requirements.txt (menos dados no contexto)
 COPY requirements.txt .
 
-# 3. Define variáveis para pip não criar cache em /root/.cache
+# 3) Faz pip não gerar cache
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1
 
-# 4. Instala em /build/deps (não em site-packages do sistema), para mover só o que precisa
+# 4) Instala só as libs que precisamos para rodar a inferência
 RUN pip install --upgrade pip && \
     pip install \
       --no-cache-dir \
@@ -33,29 +33,28 @@ RUN pip install --upgrade pip && \
         joblib==1.3.2
 
 # ───────────────────────────────────────────────────────
-# ETAPA 2: RUNTIME (imagem enxuta, só com o necessário)
+# ETAPA 2: RUNTIME (imagem enxuta, só rodar a API + modelo)
 # ───────────────────────────────────────────────────────
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# 1. Copia apenas os pacotes Python instalados no builder
+# 1) Copia as libs instaladas no builder para o site-packages do Python
 COPY --from=builder /build/deps /usr/local/lib/python3.10/site-packages
 
-# 2. Cria pasta para salvar o modelo
+# 2) Cria pasta para o modelo
 RUN mkdir -p /app/model
 
-# 3. Copia somente o código da API e os artefatos do modelo (já gerados em 'model/')
-COPY app/       ./app/
-COPY model/     ./model/
+# 3) Copia apenas o código da API (app/) e os artefatos do modelo (model/)
+COPY app/   ./app/
+COPY model/ ./model/
 COPY requirements.txt .
 
-# 4. Remove caches de apt e pip para liberar espaço (não removemos build-essential/gcc,
-#    pois eles não existem na runtime)
+# 4) Limpa caches para liberar espaço
 RUN rm -rf /var/lib/apt/lists/* /root/.cache
 
-# 5. Expõe porta 80
+# 5) Expõe a porta 80
 EXPOSE 80
 
-# 6. Define o entrypoint para iniciar o FastAPI
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+# 6) Usa “python -m uvicorn” para não depender do script uvicorn no PATH
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
