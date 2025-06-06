@@ -106,7 +106,7 @@ else
   cd "$CLOUDWATCH_DIR"
   wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
   rpm2cpio amazon-cloudwatch-agent.rpm | cpio -idmv
-  mv opt/amazon-cloudwatch-agent "$CLOUDWATCH_DIR"
+  mv opt/aws/amazon-cloudwatch-agent "$CLOUDWATCH_DIR"
   echo "✅ CloudWatch Agent instalado."
 fi
 
