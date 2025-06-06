@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY"
+echo "🚀 Iniciando FULL DEPLOY (supõe que o repositório já está atualizado)"
 
 # --- Variáveis base parametrizáveis ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
@@ -12,7 +12,7 @@ CLOUDWATCH_BIN="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/bin/amazon-cloudwatch-ag
 
 echo "🔧 Diretórios configurados:"
 echo "  - Miniconda: $MINICONDA_PATH"
-echo "  - Projeto: $PROJECT_DIR"
+echo "  - Projeto:   $PROJECT_DIR"
 echo "  - CloudWatch: $CLOUDWATCH_DIR"
 
 # --- Verifica Miniconda instalada ---
@@ -23,44 +23,39 @@ fi
 
 export PATH="$MINICONDA_PATH/bin:$PATH"
 
-# --- Carrega conda ---
+# --- Carrega conda (para habilitar conda e mamba) ---
 if [ -f "$MINICONDA_PATH/etc/profile.d/conda.sh" ]; then
   source "$MINICONDA_PATH/etc/profile.d/conda.sh"
-  export PATH="$MINICONDA_PATH/bin:$PATH"  # <-- AQUI O AJUSTE CRÍTICO PARA BLINDAR O MAMBA
+  export PATH="$MINICONDA_PATH/bin:$PATH"
 else
   echo "❌ Arquivo conda.sh não encontrado."
   exit 1
 fi
 
-# --- Verifica e instala mamba ---
+# --- Verifica e instala mamba no base, se faltar ---
 echo "🔎 Verificando mamba..."
-if ! conda list -n base | grep -q mamba; then
-    echo "⚠️ Mamba não encontrado. Instalando..."
-    conda install -n base -c conda-forge mamba -y
+if ! command -v mamba &>/dev/null; then
+  echo "⚠️ Mamba não encontrado. Instalando via conda-forge..."
+  conda install -n base -c conda-forge mamba -y
+  export PATH="$MINICONDA_PATH/bin:$PATH"
 else
-    echo "✅ Mamba já instalado."
+  echo "✅ Mamba já instalado."
 fi
 
-# --- Verifica Docker ---
+# --- Verifica Docker ativo ---
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker não instalado."
   exit 1
 fi
 
 if ! systemctl is-active --quiet docker; then
-  echo "⚠️ Docker não está ativo, iniciando..."
+  echo "⚠️ Docker não está ativo, iniciando…"
   sudo systemctl start docker
   sleep 5
 fi
-
 echo "✅ Docker está instalado e ativo."
 
-# --- Atualiza repo ---
-cd "$PROJECT_DIR"
-echo "🔄 Atualizando repositório local..."
-git fetch --all
-git reset --hard origin/main
-echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
+# --- NÃO faz git fetch/reset (assume que já veio atualizado) ---
 
 # --- Criar ou verificar ambiente conda ---
 echo "♻️ Verificando ambiente conda lstm-pipeline..."
@@ -72,14 +67,14 @@ else
 fi
 
 # --- Executa pipeline do projeto ---
-echo "📥 Executando coleta de dados..."
+echo "📥 Executando coleta de dados…"
 conda run -n lstm-pipeline python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
 
-echo "📊 Executando treino de modelo..."
+echo "📊 Executando treino de modelo…"
 conda run -n lstm-pipeline python model/treino_modelo.py || { echo "❌ Erro no treino de modelo"; exit 1; }
 
-# --- CloudWatch ---
-echo "🚀 Verificando CloudWatch Agent..."
+# --- CloudWatch Agent ---
+echo "🚀 Verificando CloudWatch Agent…"
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado"
 else
@@ -102,19 +97,19 @@ fi
 
 "$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 
-echo "🚀 Teste CloudWatch..."
+echo "🚀 Teste CloudWatch…"
 conda run -n lstm-pipeline python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
 
-# --- Docker ---
-echo "🐳 Parando e limpando containers antigos..."
+# --- Docker Build & Run ---
+echo "🐳 Parando e limpando containers antigos…"
 docker stop lstm-app-container 2>/dev/null || true
 docker rm lstm-app-container 2>/dev/null || true
 docker rmi lstm-app 2>/dev/null || true
 
-echo "🐳 Build Docker..."
+echo "🐳 Build Docker…"
 docker build -t lstm-app .
 
-echo "🐳 Start container..."
+echo "🐳 Start container…"
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"

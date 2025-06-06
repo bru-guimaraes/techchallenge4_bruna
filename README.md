@@ -87,7 +87,9 @@ chmod +x full_deploy.sh
 
 2. Após a primeira execução, para atualizações subsequentes:
 
-cd ~/deploy_app
+cd /mnt/ebs100/techchallenge4_bruna
+git fetch --all
+git reset --hard origin/main
 chmod +x full_deploy.sh
 ./full_deploy.sh
 
