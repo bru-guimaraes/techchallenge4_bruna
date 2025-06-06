@@ -1,90 +1,92 @@
+# app/model_loader.py
+
 import os
-import tempfile
 import boto3
-import tensorflow as tf
-from dotenv import load_dotenv
-import botocore
 import joblib
-
-# Carrega variáveis de ambiente
-load_dotenv()
-
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
-AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-
-# Lê a fonte de dados atual (definida no full_deploy)
-try:
-    with open("data/fonte_dados.txt", "r") as f:
-        fonte_dados = f.read().strip()
-except:
-    fonte_dados = "indefinida"  # fallback
-
-# Define o caminho dos arquivos com base na fonte
-modelo_filename = f"model_lstm_{fonte_dados}.h5"
-scaler_filename = f"scaler_{fonte_dados}.gz"
-MODEL_KEY = f"modelos/{modelo_filename}"
-SCALER_KEY = f"modelos/{scaler_filename}"
-
-# Cliente S3
-s3_client = boto3.client(
-    "s3",
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    aws_session_token=AWS_SESSION_TOKEN,
-    region_name=AWS_DEFAULT_REGION
-)
+from tensorflow.keras.models import load_model
 
 def carregar_modelo():
-    print("☁️ Baixando modelo do S3...")
+    """
+    1) Se definidas as vars BUCKET_NAME e MODEL_KEY, baixa do S3 para /app/modelos/model_lstm_<fonte>.h5
+    2) Caso contrário, espera encontrar o arquivo local em /app/modelos/model_lstm_<fonte>.h5
+    """
+    bucket = os.getenv("BUCKET_NAME")
+    model_key = os.getenv("MODEL_KEY")  # normalmente algo como "modelos/model_lstm_<fonte>.h5"
+    local_dir = "/app/modelos"
+    os.makedirs(local_dir, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
-        caminho_temp = tmp.name
+    # Extrair nome do arquivo (última parte do key) ou referencia fixa se você não usar MODEL_KEY
+    if model_key:
+        filename = os.path.basename(model_key)
+    else:
+        # Fallback para um nome padrão (sem S3). Ajuste se necessário.
+        # Por exemplo, se 'fonte_dados.txt' contiver "alpha", seu arquivo deve ser "model_lstm_alpha.h5"
+        fonte = "padrao"  # ou leia de data/fonte_dados.txt, se quiser usar essa lógica
+        filename = f"model_lstm_{fonte}.h5"
 
+    local_model_path = os.path.join(local_dir, filename)
+
+    # 1) Se BUCKET_NAME e MODEL_KEY estiverem definidos, tenta baixar do S3
+    if bucket and model_key:
+        s3 = boto3.client("s3")
+        try:
+            print(f"☁️ Baixando modelo do S3: s3://{bucket}/{model_key} → {local_model_path}")
+            s3.download_file(bucket, model_key, local_model_path)
+            print("✅ Download concluído.")
+        except Exception as e:
+            raise RuntimeError(f"❌ Erro ao baixar o modelo do S3: {e}")
+
+    # 2) Agora verifica se o arquivo local existe
+    if not os.path.isfile(local_model_path):
+        raise RuntimeError(f"❌ Modelo não encontrado em '{local_model_path}'. "
+                           "Verifique se MODEL_KEY/BUCKET_NAME estão corretos ou se o arquivo foi copiado para /app/modelos/.")
+
+    # 3) Carrega o modelo com Keras
     try:
-        s3_client.download_file(BUCKET_NAME, MODEL_KEY, caminho_temp)
-        print(f"✅ Download concluído: {caminho_temp}")
-
-        tamanho = os.path.getsize(caminho_temp)
-        print(f"📏 Tamanho do arquivo baixado: {tamanho} bytes")
-
-        with open(caminho_temp, "rb") as f:
-            cabecalho = f.read(8)
-            print(f"🔎 Primeiros bytes do arquivo: {cabecalho}")
-
-        modelo = tf.keras.models.load_model(caminho_temp)
-        print("✅ Modelo carregado com sucesso!")
-        return modelo
-
-    except botocore.exceptions.BotoCoreError as boto_err:
-        raise RuntimeError(f"Erro boto3: {boto_err}")
-
+        model = load_model(local_model_path)
+        print(f"✅ Modelo carregado com sucesso de '{local_model_path}'")
+        return model
     except Exception as e:
-        raise RuntimeError(f"❌ Erro ao carregar modelo: {e}")
+        raise RuntimeError(f"❌ Erro ao carregar o modelo de '{local_model_path}': {e}")
 
-    finally:
-        if os.path.exists(caminho_temp):
-            os.remove(caminho_temp)
 
 def carregar_scaler():
-    print("☁️ Baixando scaler do S3...")
+    """
+    1) Se definidas as vars BUCKET_NAME e SCALER_KEY, baixa do S3 para /app/modelos/scaler_<fonte>.gz
+    2) Caso contrário, espera encontrar o arquivo local em /app/modelos/scaler_<fonte>.gz
+    """
+    bucket = os.getenv("BUCKET_NAME")
+    scaler_key = os.getenv("SCALER_KEY")  # normalmente algo como "modelos/scaler_<fonte>.gz"
+    local_dir = "/app/modelos"
+    os.makedirs(local_dir, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".gz") as tmp:
-        caminho_temp = tmp.name
+    if scaler_key:
+        filename = os.path.basename(scaler_key)
+    else:
+        fonte = "padrao"  # ou leia de data/fonte_dados.txt, se você quiser
+        filename = f"scaler_{fonte}.gz"
 
+    local_scaler_path = os.path.join(local_dir, filename)
+
+    # 1) Se BUCKET_NAME e SCALER_KEY estiverem definidos, tenta baixar do S3
+    if bucket and scaler_key:
+        s3 = boto3.client("s3")
+        try:
+            print(f"☁️ Baixando scaler do S3: s3://{bucket}/{scaler_key} → {local_scaler_path}")
+            s3.download_file(bucket, scaler_key, local_scaler_path)
+            print("✅ Download do scaler concluído.")
+        except Exception as e:
+            raise RuntimeError(f"❌ Erro ao baixar o scaler do S3: {e}")
+
+    # 2) Verifica se o arquivo local existe
+    if not os.path.isfile(local_scaler_path):
+        raise RuntimeError(f"❌ Scaler não encontrado em '{local_scaler_path}'. "
+                           "Verifique se SCALER_KEY/BUCKET_NAME estão corretos ou se o arquivo foi copiado para /app/modelos/.")
+
+    # 3) Carrega o scaler com joblib
     try:
-        s3_client.download_file(BUCKET_NAME, SCALER_KEY, caminho_temp)
-        print(f"✅ Download scaler concluído: {caminho_temp}")
-
-        scaler = joblib.load(caminho_temp)
-        print("✅ Scaler carregado com sucesso!")
+        scaler = joblib.load(local_scaler_path)
+        print(f"✅ Scaler carregado com sucesso de '{local_scaler_path}'")
         return scaler
-
     except Exception as e:
-        raise RuntimeError(f"❌ Erro ao carregar scaler: {e}")
-
-    finally:
-        if os.path.exists(caminho_temp):
-            os.remove(caminho_temp)
+        raise RuntimeError(f"❌ Erro ao carregar o scaler de '{local_scaler_path}': {e}")
