@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, constr
+from pydantic import BaseModel
 from typing import List
 import numpy as np
 import time
@@ -11,7 +11,13 @@ from app.model_loader import carregar_modelo, carregar_scaler
 app = FastAPI()
 
 # ------------------------------------------------------------
-# 1) Carrega modelo e scaler treinados (janelas de 30)
+# 1) Defina um TICKER fixo para retornar na resposta
+#    (Aqui usamos "AAPL" como exemplo, mas você pode alterar)
+# ------------------------------------------------------------
+ATIVO = "AAPL"
+
+# ------------------------------------------------------------
+# 2) Carrega modelo e scaler treinados (janela = 30)
 # ------------------------------------------------------------
 try:
     modelo = carregar_modelo()
@@ -20,7 +26,7 @@ except Exception as e:
     raise RuntimeError(f"❌ Erro ao inicializar a aplicação: {e}")
 
 # ------------------------------------------------------------
-# 2) Middleware para log de tempo de resposta
+# 3) Middleware para log de tempo de resposta
 # ------------------------------------------------------------
 @app.middleware("http")
 async def log_request_time(request: Request, call_next):
@@ -31,14 +37,13 @@ async def log_request_time(request: Request, call_next):
     return resposta
 
 # ------------------------------------------------------------
-# 3) Schema de entrada: agora inclui ticker e historico (30 floats)
+# 4) Schema de entrada: agora contém só a lista de floats “historico”
 # ------------------------------------------------------------
 class PrevisaoRequest(BaseModel):
-    ticker: constr(strip_whitespace=True, min_length=1)  # string não vazia
-    historico: List[float]
+    historico: List[float]  # espera exatamente 30 valores para a previsão
 
 # ------------------------------------------------------------
-# 4) Função auxiliar: detecta tendência em 30 preços
+# 5) Função auxiliar: detecta tendência em 30 preços
 # ------------------------------------------------------------
 def detectar_tendencia(prices: List[float]) -> str:
     """
@@ -72,13 +77,13 @@ def detectar_tendencia(prices: List[float]) -> str:
         return "neutro"
 
 # ------------------------------------------------------------
-# 5) Endpoint /prever
+# 6) Endpoint /prever
 # ------------------------------------------------------------
 @app.post("/prever")
 def prever(request: PrevisaoRequest):
     WINDOW_SIZE = 30
 
-    # 5.1) Valida que ticker não seja vazio (já garantido pelo Pydantic) e que tenhamos 30 valores
+    # 6.1) Valida que haja pelo menos 30 valores
     if len(request.historico) < WINDOW_SIZE:
         raise HTTPException(
             status_code=400,
@@ -86,31 +91,31 @@ def prever(request: PrevisaoRequest):
         )
 
     try:
-        # 5.2) Extrair exatamente os últimos 30 preços
+        # 6.2) Extrair exatamente os últimos 30 preços
         seq_raw = request.historico[-WINDOW_SIZE:]  # lista de 30 floats
 
-        # 5.3) Detectar tendência
+        # 6.3) Detectar tendência
         tendencia = detectar_tendencia(seq_raw)
 
-        # 5.4) Preparar array para o modelo: (1, 30, 1)
+        # 6.4) Preparar array para o modelo: (1, 30, 1)
         seq_arr = np.array(seq_raw, dtype=float).reshape(1, WINDOW_SIZE, 1)
 
-        # 5.5) Previsão (normalizada) e desserialização
+        # 6.5) Previsão (normalizada) e desserialização
         pred_norm = modelo.predict(seq_arr)[0][0]
         pred = scaler.inverse_transform([[pred_norm]])[0][0]
 
-        # 5.6) Último preço informado
+        # 6.6) Último preço informado
         ultimo_preco = seq_raw[-1]
 
-        # 5.7) Montar resposta com ticker, último preço, tendência e previsão
+        # 6.7) Montar resposta com TICKER fixo, último preço, tendência e previsão
         return JSONResponse(
             content={
-                "ticker": request.ticker.upper(),
+                "ticker": ATIVO,  # retorna sempre "AAPL" (ou outro que você definir)
                 "ultimo_preco": f"US$ {ultimo_preco:.2f}",
                 "preco_previsto": f"US$ {pred:.2f}",
                 "tendencia": tendencia,
                 "explicacao": (
-                    f"Para o ticker '{request.ticker.upper()}', usamos os últimos "
+                    f"Para o ticker '{ATIVO}', usamos os últimos "
                     f"{WINDOW_SIZE} valores para estimar o próximo preço. "
                     f"Classificado como '{tendencia}'."
                 )
