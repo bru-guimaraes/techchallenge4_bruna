@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando"
+echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MAMBA e VARIÁVEIS PARAMETRIZADAS"
 
 # --- Variáveis base parametrizáveis ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
@@ -31,6 +31,15 @@ else
   exit 1
 fi
 
+# --- Verifica e instala mamba ---
+echo "🔎 Verificando mamba..."
+if ! conda list -n base | grep -q mamba; then
+    echo "⚠️ Mamba não encontrado. Instalando..."
+    conda install -n base -c conda-forge mamba -y
+else
+    echo "✅ Mamba já instalado."
+fi
+
 # --- Verifica Docker ---
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker não instalado."
@@ -57,8 +66,8 @@ echo "♻️ Verificando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
   echo "✅ Ambiente lstm-pipeline já existe."
 else
-  echo "♻️ Criando ambiente lstm-pipeline..."
-  conda env create -f environment.yml
+  echo "♻️ Criando ambiente lstm-pipeline com mamba..."
+  mamba env create -f environment.yml
 fi
 
 # --- Executa pipeline do projeto ---
