@@ -8,7 +8,7 @@ PROJECT_DIR="${PROJECT_DIR:-$BASE_PATH/techchallenge4_bruna}"
 VENV_DIR="$BASE_PATH/venv310"
 TMPDIR="$BASE_PATH/tmp"
 
-# Instalação do CloudWatch Agent deve ocorrer em /opt para permitir permissões corretas
+# CloudWatch Agent ficará em /opt/aws/amazon-cloudwatch-agent
 CLOUDWATCH_DIR="/opt/aws/amazon-cloudwatch-agent"
 CLOUDWATCH_BIN="$CLOUDWATCH_DIR/bin/amazon-cloudwatch-agent-ctl"
 
@@ -98,32 +98,31 @@ python3.10 data/coleta.py || { echo "❌ Erro na coleta"; deactivate; exit 1; }
 echo "📊 Executando treino…"
 python3.10 model/treino_modelo.py || { echo "❌ Erro no treino"; deactivate; exit 1; }
 
-# 13) Configurar CloudWatch Agent (opcional, mas recomendado)
+# 13) Configurar CloudWatch Agent (opcional)
 echo "🚀 Verificando AWS CloudWatch Agent…"
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado em $CLOUDWATCH_DIR."
 else
   echo "⚠️ Instalando CloudWatch Agent em /opt/aws/amazon-cloudwatch-agent..."
-  # Criar diretório /opt/aws se ainda não existir
+  # Criar /opt/aws, caso não exista, e ajustar permissões
   sudo mkdir -p /opt/aws
   sudo chown "$USER":"$USER" /opt/aws
 
-  # Entrar em /opt/aws, baixar e extrair
   cd /opt/aws
   wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
   rpm2cpio amazon-cloudwatch-agent.rpm | cpio -idmv
 
-  # Mover a pasta extraída para o destino correto
+  # Mover a pasta correta
   sudo mv opt/aws/amazon-cloudwatch-agent /opt/aws/
   sudo chown -R "$USER":"$USER" "$CLOUDWATCH_DIR"
 
-  # Remover arquivos desnecessários
-  rm -rf rpm2cpio* amazon-cloudwatch-agent.rpm opt usr var
+  # Limpar arquivos extras
+  rm -rf amazon-cloudwatch-agent.rpm opt usr var
 
   echo "✅ CloudWatch Agent instalado em $CLOUDWATCH_DIR."
 fi
 
-# 14) Copiar config do CloudWatch para /opt/aws/amazon-cloudwatch-agent/etc/...
+# 14) Copiar config do CloudWatch para o local correto
 CONFIG_SRC="$PROJECT_DIR/cloudwatch-config.json"
 CONFIG_DST="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
 if [ -f "$CONFIG_SRC" ]; then
@@ -135,6 +134,7 @@ else
   exit 1
 fi
 
+# 15) Iniciar o CloudWatch Agent via ctl (não usa systemd)
 echo "▶️ Iniciando CloudWatch Agent…"
 sudo "$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 echo "✅ CloudWatch Agent iniciado."
@@ -142,7 +142,7 @@ echo "✅ CloudWatch Agent iniciado."
 echo "🚀 Testando métrica customizada…"
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha no teste CloudWatch."
 
-# 15) Build e run no Docker
+# 16) Build e run no Docker
 echo "🐳 Parando e limpando containers/imagens antigos…"
 docker stop lstm-app-container 2>/dev/null || true
 docker rm lstm-app-container 2>/dev/null || true
@@ -156,5 +156,5 @@ docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
 
-# 16) Desativa o venv
+# 17) Desativa o venv
 deactivate
