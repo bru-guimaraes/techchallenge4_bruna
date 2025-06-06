@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY ROBUSTO com VARIÁVEIS PARAMETRIZADAS"
+echo "🚀 Iniciando"
 
 # --- Variáveis base parametrizáveis ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"

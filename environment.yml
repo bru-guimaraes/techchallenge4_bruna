@@ -7,6 +7,7 @@ dependencies:
   - scikit-learn=1.2.2
   - pandas
   - numpy
+  - pyarrow            # 👈 ADICIONADO AQUI
   - joblib=1.3.2
   - pip
   - pip:
