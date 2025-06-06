@@ -38,7 +38,6 @@ def prever(request: PrevisaoRequest):
 
         return JSONResponse(
             content={
-                "ticker": request.ticker.upper(),
                 "preco_previsto": f"US$ {predicao:.2f}",
                 "explicacao": "Valor estimado de fechamento da ação para o próximo dia com base nos dados fornecidos"
             }
