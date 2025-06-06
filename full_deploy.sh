@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY"
+echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MINICONDA_PATH variável"
 
 MINICONDA_PATH=/mnt/ebs100/miniconda3
 PROJECT_DIR=/mnt/ebs100/techchallenge4_bruna
@@ -54,17 +54,24 @@ cd "$PROJECT_DIR"
 echo "🔄 Atualizando repositório local..."
 git fetch --all
 git reset --hard origin/main
+echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 
 # --- Criar ou atualizar ambiente conda ---
 echo "♻️ Criando ou atualizando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
-  conda env update -n lstm-pipeline -f environment.yml --prune || {
+  if ! conda env update -n lstm-pipeline -f environment.yml --prune; then
     echo "⚠️ Falha ao atualizar ambiente, tentando recriar..."
     conda env remove -n lstm-pipeline -y
-    conda env create -f environment.yml
-  }
+    conda env create -f environment.yml || {
+      echo "❌ Falha crítica ao criar ambiente conda."
+      exit 1
+    }
+  fi
 else
-  conda env create -f environment.yml
+  conda env create -f environment.yml || {
+    echo "❌ Falha crítica ao criar ambiente conda."
+    exit 1
+  }
 fi
 
 # --- Ativa ambiente ---
@@ -78,6 +85,13 @@ if [ -f requirements.txt ]; then
 else
   echo "⚠️ Arquivo requirements.txt não encontrado, pulando instalação pip."
 fi
+
+# --- Executa pipeline do projeto: coleta e treino ---
+echo "📥 Executando coleta de dados (data/coleta.py)..."
+python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
+
+echo "📊 Executando treino do modelo (model/treino_modelo.py)..."
+python model/treino_modelo.py || { echo "❌ Erro no treino do modelo"; exit 1; }
 
 # --- Configurar AWS CloudWatch Agent ---
 echo "🚀 Configurando AWS CloudWatch Agent..."
