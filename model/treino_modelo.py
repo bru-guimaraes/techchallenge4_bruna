@@ -75,7 +75,7 @@ def criar_sequencias(series, janela):
         y.append(series[i+janela])
     return np.array(X), np.array(y)
 
-janela = 5
+janela = 30
 serie = df['Close_Scaled'].values
 X, y = criar_sequencias(serie, janela)
 X = X.reshape((X.shape[0], X.shape[1], 1))
