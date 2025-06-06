@@ -5,6 +5,8 @@ echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MINICONDA_PATH variável"
 
 MINICONDA_PATH=/mnt/ebs100/miniconda3
 PROJECT_DIR=/mnt/ebs100/techchallenge4_bruna
+CLOUDWATCH_DIR="/mnt/ebs100/amazon-cloudwatch-agent"
+CLOUDWATCH_BIN="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
 
 echo "Usando Miniconda em: $MINICONDA_PATH"
 echo "Diretório do projeto: $PROJECT_DIR"
@@ -95,29 +97,42 @@ python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
 echo "📊 Executando treino do modelo (model/treino_modelo.py)..."
 python model/treino_modelo.py || { echo "❌ Erro no treino do modelo"; exit 1; }
 
-# --- Configurar AWS CloudWatch Agent ---
-echo "🚀 Configurando AWS CloudWatch Agent..."
+# --- Instala CloudWatch Agent no volume maior se não existir ---
+echo "🚀 Verificando AWS CloudWatch Agent no volume maior..."
 
-if ! command -v amazon-cloudwatch-agent-ctl &> /dev/null; then
-  echo "⚠️ CloudWatch Agent não encontrado, instalando..."
-  sudo yum install -y amazon-cloudwatch-agent
+if [ -x "$CLOUDWATCH_BIN" ]; then
+  echo "✅ CloudWatch Agent já instalado em $CLOUDWATCH_BIN"
+else
+  echo "⚠️ CloudWatch Agent não encontrado. Instalando no volume maior..."
+
+  mkdir -p "$CLOUDWATCH_DIR"
+  cd "$CLOUDWATCH_DIR"
+
+  wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+
+  rpm2cpio amazon-cloudwatch-agent.rpm | cpio -idmv
+
+  mv opt/amazon-cloudwatch-agent "$CLOUDWATCH_DIR"
+
+  echo "✅ CloudWatch Agent instalado em $CLOUDWATCH_DIR"
 fi
 
+# Copia a configuração para o diretório do agente
 CONFIG_SRC="$PROJECT_DIR/cloudwatch-config.json"
-CONFIG_DST="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+CONFIG_DST="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
 
 if [ -f "$CONFIG_SRC" ]; then
-  echo "Copiando cloudwatch-config.json para $CONFIG_DST"
-  sudo cp "$CONFIG_SRC" "$CONFIG_DST"
+  echo "📋 Copiando configuração para $CONFIG_DST"
+  cp "$CONFIG_SRC" "$CONFIG_DST"
 else
   echo "❌ Arquivo cloudwatch-config.json não encontrado em $CONFIG_SRC"
   exit 1
 fi
 
-echo "Iniciando CloudWatch Agent com configuração..."
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
-echo "✅ CloudWatch Agent configurado e rodando."
+# Inicia o agente com a configuração personalizada
+echo "▶️ Iniciando CloudWatch Agent..."
+"$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
+echo "✅ CloudWatch Agent iniciado com sucesso."
 
 echo "🚀 Executando teste de métrica customizada no CloudWatch..."
 conda activate lstm-pipeline
