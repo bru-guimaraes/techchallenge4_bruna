@@ -8,10 +8,10 @@ dependencies:
   - pandas
   - numpy
   - pyarrow
-  - joblib=1.3.2
   - tensorflow=2.15
   - pip
   - pip:
+      - joblib==1.3.2
       - boto3==1.34.103
       - fastapi==0.115.1
       - uvicorn[standard]==0.34.1
