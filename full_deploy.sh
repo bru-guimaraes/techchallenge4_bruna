@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY (supõe que o repositório já está atualizado)"
+echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MAMBA e VARIÁVEIS PARAMETRIZADAS"
 
 # --- Variáveis base parametrizáveis ---
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
@@ -23,7 +23,7 @@ fi
 
 export PATH="$MINICONDA_PATH/bin:$PATH"
 
-# --- Carrega conda (para habilitar conda e mamba) ---
+# --- Carrega conda para habilitar conda e mamba ---
 if [ -f "$MINICONDA_PATH/etc/profile.d/conda.sh" ]; then
   source "$MINICONDA_PATH/etc/profile.d/conda.sh"
   export PATH="$MINICONDA_PATH/bin:$PATH"
@@ -32,7 +32,7 @@ else
   exit 1
 fi
 
-# --- Verifica e instala mamba no base, se faltar ---
+# --- Verifica e instala mamba se faltar ---
 echo "🔎 Verificando mamba..."
 if ! command -v mamba &>/dev/null; then
   echo "⚠️ Mamba não encontrado. Instalando via conda-forge..."
@@ -55,18 +55,23 @@ if ! systemctl is-active --quiet docker; then
 fi
 echo "✅ Docker está instalado e ativo."
 
-# --- NÃO faz git fetch/reset (assume que já veio atualizado) ---
+# --- Atualiza repositório local ---
+cd "$PROJECT_DIR"
+echo "🔄 Atualizando repositório local..."
+git fetch --all
+git reset --hard origin/main
+echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 
-# --- Criar ou verificar ambiente conda ---
+# --- Criar ou verificar ambiente conda 'lstm-pipeline' ---
 echo "♻️ Verificando ambiente conda lstm-pipeline..."
-if conda env list | grep -q "lstm-pipeline"; then
-  echo "✅ Ambiente lstm-pipeline já existe."
+if mamba env list | awk '{ print $1 }' | grep -qx "lstm-pipeline"; then
+  echo "✅ Ambiente 'lstm-pipeline' já existe. Pulando criação."
 else
-  echo "♻️ Criando ambiente lstm-pipeline com mamba..."
+  echo "♻️ Ambiente 'lstm-pipeline' não encontrado. Criando com mamba..."
   mamba env create -f environment.yml
 fi
 
-# --- Executa pipeline do projeto ---
+# --- Executa pipeline do projeto: coleta e treino ---
 echo "📥 Executando coleta de dados…"
 conda run -n lstm-pipeline python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
 
