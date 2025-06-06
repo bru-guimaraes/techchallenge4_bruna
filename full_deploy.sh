@@ -1,15 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Iniciando FULL DEPLOY ROBUSTO com MINICONDA_PATH variável"
+echo "🚀 Iniciando FULL DEPLOY ROBUSTO com VARIÁVEIS PARAMETRIZADAS"
 
-MINICONDA_PATH=/mnt/ebs100/miniconda3
-PROJECT_DIR=/mnt/ebs100/techchallenge4_bruna
-CLOUDWATCH_DIR="/mnt/ebs100/amazon-cloudwatch-agent"
+# --- Variáveis base parametrizáveis ---
+BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
+MINICONDA_PATH="${MINICONDA_PATH:-$BASE_PATH/miniconda3}"
+PROJECT_DIR="${PROJECT_DIR:-$BASE_PATH/techchallenge4_bruna}"
+CLOUDWATCH_DIR="${CLOUDWATCH_DIR:-$BASE_PATH/amazon-cloudwatch-agent}"
 CLOUDWATCH_BIN="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
 
-echo "Usando Miniconda em: $MINICONDA_PATH"
-echo "Diretório do projeto: $PROJECT_DIR"
+echo "🔧 Diretórios configurados:"
+echo "  - Miniconda: $MINICONDA_PATH"
+echo "  - Projeto: $PROJECT_DIR"
+echo "  - CloudWatch: $CLOUDWATCH_DIR"
 
 # --- Verifica Miniconda instalada ---
 if [ ! -d "$MINICONDA_PATH" ]; then
@@ -51,23 +55,18 @@ echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 # --- Criar ou verificar ambiente conda ---
 echo "♻️ Verificando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
-  echo "✅ Ambiente lstm-pipeline já existe, ativando..."
+  echo "✅ Ambiente lstm-pipeline já existe."
 else
   echo "♻️ Criando ambiente lstm-pipeline..."
   conda env create -f environment.yml
 fi
 
-# --- Ativa ambiente (AJUSTE FINAL) ---
-echo "🟢 Ativando ambiente lstm-pipeline..."
-source "$MINICONDA_PATH/etc/profile.d/conda.sh"
-conda activate lstm-pipeline
-
 # --- Executa pipeline do projeto ---
 echo "📥 Executando coleta de dados..."
-python data/coleta.py || { echo "❌ Erro na coleta"; exit 1; }
+conda run -n lstm-pipeline python data/coleta.py || { echo "❌ Erro na coleta de dados"; exit 1; }
 
-echo "📊 Executando treino do modelo..."
-python model/treino_modelo.py || { echo "❌ Erro no treino"; exit 1; }
+echo "📊 Executando treino de modelo..."
+conda run -n lstm-pipeline python model/treino_modelo.py || { echo "❌ Erro no treino de modelo"; exit 1; }
 
 # --- CloudWatch ---
 echo "🚀 Verificando CloudWatch Agent..."
@@ -94,7 +93,7 @@ fi
 "$CLOUDWATCH_BIN" -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
 
 echo "🚀 Teste CloudWatch..."
-python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
+conda run -n lstm-pipeline python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
 
 # --- Docker ---
 echo "🐳 Parando e limpando containers antigos..."
