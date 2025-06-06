@@ -144,22 +144,22 @@ echo "🚀 Verificando AWS CloudWatch Agent..."
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado em $CLOUDWATCH_DIR."
 else
-  echo "⚠️ Instalando CloudWatch Agent em /opt/aws/amazon-cloudwatch-agent…"
+  echo "⚠️ Instalando CloudWatch Agent em /opt/aws/amazon-cloudwatch-agent..."
 
-  # Criar /opt/aws e ajustar permissões
+  # 15.1) Criar /opt/aws e ajustar permissões
   sudo mkdir -p /opt/aws
   sudo chown "$USER":"$USER" /opt/aws
 
-  # Entrar em /opt/aws, baixar e extrair o RPM
+  # 15.2) Entrar em /opt/aws, baixar e extrair o RPM
   cd /opt/aws
   wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
   rpm2cpio amazon-cloudwatch-agent.rpm | cpio -idmv
 
-  # Mover a pasta correta e ajustar permissões
+  # 15.3) Mover a pasta correta e ajustar permissões
   sudo mv opt/aws/amazon-cloudwatch-agent /opt/aws/
   sudo chown -R "$USER":"$USER" "$CLOUDWATCH_DIR"
 
-  # Limpar arquivos extras
+  # 15.4) Limpar arquivos extras
   rm -rf amazon-cloudwatch-agent.rpm opt usr var
 
   echo "✅ CloudWatch Agent instalado em $CLOUDWATCH_DIR."
@@ -168,7 +168,7 @@ fi
 # ----------------------------------------------------
 # 16) Criar e habilitar o systemd service para o CloudWatch Agent
 # ----------------------------------------------------
-echo "🛠️  Configurando o service unit do CloudWatch Agent em systemd…"
+echo "🛠️  Configurando o service unit do CloudWatch Agent em systemd..."
 
 sudo tee /etc/systemd/system/amazon-cloudwatch-agent.service > /dev/null << 'EOF'
 [Unit]
@@ -186,21 +186,21 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-echo "▶️ Recarregando systemd e habilitando o serviço…"
+echo "▶️ Recarregando systemd e habilitando o serviço..."
 sudo systemctl daemon-reload
 sudo systemctl enable amazon-cloudwatch-agent.service
 sudo systemctl start amazon-cloudwatch-agent.service
 
-# Agora o agente rodará em segundo-plano via service unit
 echo "✅ Service unit do CloudWatch Agent habilitado e iniciado."
 
 # ----------------------------------------------------
-# 17) Copiar config JSON para o local correto e reconectar / restart (opcional)
+# 17) Copiar config JSON (na raiz do projeto) para /opt/aws/amazon-cloudwatch-agent/etc
 # ----------------------------------------------------
 CONFIG_SRC="$PROJECT_DIR/cloudwatch-config.json"
 CONFIG_DST="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
 
 if [ -f "$CONFIG_SRC" ]; then
+  echo "📄 Copiando cloudwatch-config.json para $CONFIG_DST..."
   sudo cp "$CONFIG_SRC" "$CONFIG_DST"
   sudo chown "$USER":"$USER" "$CONFIG_DST"
 else
@@ -209,28 +209,30 @@ else
   exit 1
 fi
 
-# Se for necessário reiniciar o agente após copiar config:
-echo "▶️ Aplicando configuração (fetch + restart) no CloudWatch Agent via ctl…"
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
+# 17.1) Aplicar a configuração ao agente (fetch + restart)
+echo "▶️ Aplicando configuração (fetch + restart) no CloudWatch Agent..."
+sudo $CLOUDWATCH_BIN -a fetch-config -m ec2 -c file:"$CONFIG_DST" -s
+
+echo "✅ CloudWatch Agent configurado com o JSON do projeto."
 
 # ----------------------------------------------------
 # 18) Executar teste rápido do CloudWatch (opcional)
 # ----------------------------------------------------
-echo "🚀 Testando métrica customizada (se existir)…"
+echo "🚀 Testando métrica customizada (se existir)..."
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Aviso: falha no teste CloudWatch."
 
 # ----------------------------------------------------
 # 19) Parar containers/imagens antigos e construir o Docker
 # ----------------------------------------------------
-echo "🐳 Parando e removendo containers/imagens antigos…"
+echo "🐳 Parando e removendo containers/imagens antigos..."
 docker stop lstm-app-container 2>/dev/null || true
 docker rm   lstm-app-container 2>/dev/null || true
 docker rmi  lstm-app           2>/dev/null || true
 
-echo "🐳 Construindo nova imagem Docker (tag: lstm-app)…"
+echo "🐳 Construindo nova imagem Docker (tag: lstm-app)..."
 docker build -t lstm-app .
 
-echo "🐳 Rodando container Docker (lstm-app-container na porta 80)…"
+echo "🐳 Rodando container Docker (lstm-app-container na porta 80)..."
 docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
