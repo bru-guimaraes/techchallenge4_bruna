@@ -6,21 +6,27 @@ echo "🚀 Iniciando FULL DEPLOY SIMPLIFICADO (venv com python3.10 + pip)"
 BASE_PATH="${BASE_PATH:-/mnt/ebs100}"
 PROJECT_DIR="${PROJECT_DIR:-$BASE_PATH/techchallenge4_bruna}"
 VENV_DIR="$BASE_PATH/venv310"
+TMPDIR="$BASE_PATH/tmp"
 CLOUDWATCH_DIR="$BASE_PATH/amazon-cloudwatch-agent"
 CLOUDWATCH_BIN="$CLOUDWATCH_DIR/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
 
 echo "🔧 Caminhos:"
 echo "  - Projeto:    $PROJECT_DIR"
 echo "  - Virtualenv: $VENV_DIR"
+echo "  - TMPDIR:     $TMPDIR"
 echo "  - CloudWatch: $CLOUDWATCH_DIR"
 
-# 1) Verifica se python3.10 está instalado
+# 1) Criar TMPDIR para pip e builds (evita “No space left” em /tmp)
+mkdir -p "$TMPDIR"
+export TMPDIR
+
+# 2) Verifica se python3.10 está instalado
 if ! command -v python3.10 &>/dev/null; then
   echo "❌ python3.10 não encontrado. Certifique-se de ter seguido o build do Python 3.10 (make altinstall)."
   exit 1
 fi
 
-# 2) Criar (ou reutilizar) o venv com python3.10
+# 3) Criar (ou reutilizar) o venv com python3.10
 if [ ! -d "$VENV_DIR" ]; then
   echo "♻️ Criando venv em $VENV_DIR com python3.10..."
   python3.10 -m venv "$VENV_DIR"
@@ -28,35 +34,37 @@ else
   echo "✅ Virtualenv já existe em $VENV_DIR"
 fi
 
-# 3) Ativar o venv
+# 4) Ativar o venv
 source "$VENV_DIR/bin/activate"
 
-# 4) Atualizar pip / setuptools / wheel e instalar numpy, scipy, scikit-learn via wheels
+# 5) Atualizar pip / setuptools / wheel
 echo "📦 Atualizando pip, setuptools e wheel..."
-python3.10 -m pip install --upgrade pip setuptools wheel
+python3.10 -m pip install --upgrade pip setuptools wheel --no-cache-dir
 
+# 6) Instalar NumPy e SciPy via wheels (uso --no-cache-dir para reduzir uso de /tmp)
 echo "📦 Instalando NumPy e SciPy via wheel..."
-python3.10 -m pip install numpy scipy
+python3.10 -m pip install numpy scipy --no-cache-dir
 
+# 7) Instalar scikit-learn via wheels binários
 echo "📦 Instalando scikit-learn via wheel (--prefer-binary)..."
-python3.10 -m pip install --prefer-binary scikit-learn
+python3.10 -m pip install --prefer-binary scikit-learn --no-cache-dir
 
-# 5) Ajustar fastparquet no requirements.txt (versão 2024.3.0 não existe no PyPI)
+# 8) Ajustar fastparquet no requirements.txt (versão 2024.3.0 não existe)
 REQ_FILE="$PROJECT_DIR/requirements.txt"
 if grep -q "fastparquet==2024.3.0" "$REQ_FILE"; then
   echo "🔄 Substituindo fastparquet==2024.3.0 por fastparquet==2024.2.0 no requirements.txt"
   sed -i 's|fastparquet==2024.3.0|fastparquet==2024.2.0|g' "$REQ_FILE"
 fi
 
-# 6) Instalar demais dependências do projeto
+# 9) Instalar demais dependências do projeto (usando TMPDIR e sem cache)
 if [ -f "$REQ_FILE" ]; then
-  echo "📦 Instalando dependências do projeto (requirements.txt)..."
-  python3.10 -m pip install -r "$REQ_FILE"
+  echo "📦 Instalando demais dependências do projeto (requirements.txt)..."
+  python3.10 -m pip install -r "$REQ_FILE" --no-cache-dir
 else
   echo "⚠️ requirements.txt não encontrado em $PROJECT_DIR; pulando esta etapa."
 fi
 
-# 7) Verificar Docker
+# 10) Verificar Docker
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker não instalado. Instale o Docker e tente novamente."
   deactivate
@@ -74,21 +82,21 @@ if ! systemctl is-active --quiet docker; then
 fi
 echo "✅ Docker ativo."
 
-# 8) Atualizar repositório local
+# 11) Atualizar repositório local
 cd "$PROJECT_DIR"
 echo "🔄 Atualizando repositório..."
 git fetch --all
 git reset --hard origin/main
 echo "🔄 Código em $(git rev-parse --short HEAD)"
 
-# 9) Executar coleta e treino (já no venv Python 3.10)
+# 12) Executar coleta e treino (já no venv Python 3.10)
 echo "📥 Executando coleta de dados…"
 python3.10 data/coleta.py || { echo "❌ Erro na coleta"; deactivate; exit 1; }
 
 echo "📊 Executando treino…"
 python3.10 model/treino_modelo.py || { echo "❌ Erro no treino"; deactivate; exit 1; }
 
-# 10) Configurar CloudWatch Agent (opcional)
+# 13) Configurar CloudWatch Agent (opcional)
 echo "🚀 Verificando AWS CloudWatch Agent…"
 if [ -x "$CLOUDWATCH_BIN" ]; then
   echo "✅ CloudWatch Agent já instalado."
@@ -120,7 +128,7 @@ echo "✅ CloudWatch Agent iniciado."
 echo "🚀 Testando métrica customizada…"
 python3.10 "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha no teste CloudWatch."
 
-# 11) Build e run no Docker
+# 14) Build e run no Docker
 echo "🐳 Parando e limpando containers/imagens antigos…"
 docker stop lstm-app-container 2>/dev/null || true
 docker rm lstm-app-container 2>/dev/null || true
@@ -134,5 +142,5 @@ docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 echo "✅ FULL DEPLOY concluído com sucesso!"
 
-# 12) Desativa o venv
+# 15) Desativa o venv
 deactivate
