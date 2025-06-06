@@ -175,7 +175,7 @@ docker run -d --name lstm-app-container -p 80:80 lstm-app
 
 # API Online
 
-URL base: http://<IP_PUBLICO_DA_INSTÂNCIA>/
+URL base: http://<IP_PUBLICO_DA_INSTÂNCIA>/docs
 
 Endpoints:
 - /docs     (Swagger UI)
