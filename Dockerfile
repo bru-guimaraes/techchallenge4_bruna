@@ -1,65 +1,61 @@
-# ----------------------------------------------------
-# 1) Etapa de Build (Multi‐stage) para 
-#    preparar tudo sem poluir a imagem final
-# ----------------------------------------------------
+# ───────────────────────────────────────────────────────
+# ETAPA 1: BUILDER (instala tudo em /deps sem poluir o runtime)
+# ───────────────────────────────────────────────────────
 FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
-# 1.1) Instala dependências de sistema que podem ser requeridas por algumas wheels
+# 1. Instala apenas o que for necessário para compilar algumas wheels (ex.: TensorFlow)
 RUN apt-get update && apt-get install -y \
       build-essential \
       gcc \
-      libglu1 \
+      libgl1 \
       libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 1.2) Copia requirements e instala em um diretório próprio
+# 2. Copia apenas o requirements.txt para reduzir contexto de build
 COPY requirements.txt .
-# Definimos variáveis para forçar pip a não manter cache
+
+# 3. Define variáveis para pip não criar cache em /root/.cache
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1
 
+# 4. Instala em /build/deps (não em site-packages do sistema), para mover só o que precisa
 RUN pip install --upgrade pip && \
     pip install \
       --no-cache-dir \
       --target=/build/deps \
-      numpy==1.26.4 \
-      pandas==2.2.2 \
-      joblib==1.3.2 \
-      boto3==1.34.103 \
-      pyarrow==15.0.2 \
-      tensorflow==2.15.0 \
-      fastapi==0.115.1 \
-      "uvicorn[standard]==0.34.1" \
-      pydantic==2.11.5 \
-      yfinance==0.2.37 \
-      python-dotenv==1.0.1
+        tensorflow==2.15.0 \
+        fastapi==0.115.1 \
+        "uvicorn[standard]==0.34.1" \
+        pydantic==2.11.5 \
+        boto3==1.34.103 \
+        joblib==1.3.2
 
-# ----------------------------------------------------
-# 2) Etapa "Runtime" – imagem menor, só com o necessário
-# ----------------------------------------------------
+# ───────────────────────────────────────────────────────
+# ETAPA 2: RUNTIME (imagem enxuta, só com o necessário)
+# ───────────────────────────────────────────────────────
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# 2.1) Copia a pasta 'deps' do builder (todas as libs instaladas)
+# 1. Copia apenas os pacotes Python instalados no builder
 COPY --from=builder /build/deps /usr/local/lib/python3.10/site-packages
 
-# 2.2) Cria diretórios para a API e para o model
+# 2. Cria pasta para salvar o modelo
 RUN mkdir -p /app/model
 
-# 2.3) Copia apenas o código-fonte e os artefatos necessários
-COPY app/ ./app/
-COPY model/modelo_lstm.keras ./model/
-COPY model/scaler.gz      ./model/
+# 3. Copia somente o código da API e os artefatos do modelo (já gerados em 'model/')
+COPY app/       ./app/
+COPY model/     ./model/
+COPY requirements.txt .
 
-# 2.4) Garante que não existam caches do apt nem do pip na imagem final
-RUN apt-get purge -y build-essential gcc \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/* /root/.cache
+# 4. Remove caches de apt e pip para liberar espaço (não removemos build-essential/gcc,
+#    pois eles não existem na runtime)
+RUN rm -rf /var/lib/apt/lists/* /root/.cache
 
-# 2.5) Expõe a porta e define o comando de inicialização
+# 5. Expõe porta 80
 EXPOSE 80
 
+# 6. Define o entrypoint para iniciar o FastAPI
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
