@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python=3.10
   - scikit-learn=1.2.2
-  - pandas  # automaticamente já traz numpy e as dependências C
+  - pandas
   - numpy
   - joblib=1.3.2
   - pip
