@@ -1,5 +1,3 @@
-# Caminho: você pode colocar esse script dentro da sua raiz do projeto
-
 # ⚠ ATENÇÃO: este script presume que você já configurou o Git localmente no seu Windows.
 # Ex: git config --global user.name e user.email já definidos
 

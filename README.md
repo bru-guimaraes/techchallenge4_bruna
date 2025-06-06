@@ -147,3 +147,13 @@ scp -i caminho/chave.pem .env ec2-user@IP_NOVO:/home/ec2-user/deploy_app/
 * DuckDNS para IP dinâmico
 * Auto-atualização de credenciais temporárias AWS
 * Totalmente reprodutível sem necessidade de Windows local
+
+
+#Orientação novo EC2
+sudo yum update -y
+sudo yum install git -y
+git clone https://github.com/bru-guimaraes/techchallenge4_bruna.git
+cd techchallenge4_bruna
+chmod +x full_deploy.sh
+./full_deploy.sh
+
