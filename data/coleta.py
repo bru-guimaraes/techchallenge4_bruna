@@ -3,12 +3,10 @@ import pandas as pd
 import yfinance as yf
 from alpha_vantage.timeseries import TimeSeries
 
-# Ativo a ser coletado
 ATIVO = "AAPL"
 ARQUIVO_LOCAL = f"data/{ATIVO}_fechamento.parquet"
 ARQUIVO_S3 = f"acoes/{ATIVO}_fechamento.parquet"
 
-# Carrega variáveis de ambiente
 USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -18,15 +16,13 @@ ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
 
 df = None
 
-# 1️⃣ Primeiro tenta via yfinance
+# 1️⃣ Tenta coletar dados via yfinance
 try:
     print(f"📥 Tentando coletar via yfinance para {ATIVO}...")
     df = yf.download(ATIVO, period="1y", interval="1d")
     if df.empty:
         raise ValueError("Sem dados no yfinance.")
-    df.reset_index(inplace=True)  # garante 'Date' como coluna
-    if 'Date' not in df.columns and 'date' in df.columns:
-        df.rename(columns={'date': 'Date'}, inplace=True)
+    df.reset_index(inplace=True)
     print("✅ Dados coletados via yfinance.")
 except Exception as e:
     print(f"⚠ Erro no yfinance: {e}")
@@ -39,7 +35,6 @@ if df is None and ALPHAVANTAGE_API_KEY:
         ts = TimeSeries(key=ALPHAVANTAGE_API_KEY, output_format='pandas')
         data, meta = ts.get_daily(symbol=ATIVO, outputsize='compact')
         data.reset_index(inplace=True)
-        # Renomear colunas para padronizar com yfinance
         data.rename(columns={
             "date": "Date",
             "1. open": "Open",
@@ -72,25 +67,21 @@ os.makedirs("data", exist_ok=True)
 df.to_parquet(ARQUIVO_LOCAL, index=False)
 print(f"✅ Arquivo local salvo em {ARQUIVO_LOCAL}")
 
-# Upload ao S3 só se USE_S3=true
+# Envia para o S3 se configurado
 if USE_S3:
     import boto3
-    import botocore.exceptions
-
     if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
         raise EnvironmentError("❌ Credenciais AWS ausentes ou mal definidas no .env.")
-
     session = boto3.Session(
         aws_access_key_id=AWS_ACCESS_KEY_ID,
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         aws_session_token=AWS_SESSION_TOKEN
     )
     s3 = session.client("s3")
-
     try:
         print("☁️ Enviando para o S3...")
         s3.upload_file(ARQUIVO_LOCAL, BUCKET, ARQUIVO_S3)
-        print(f"✅ Arquivo enviado com sucesso para s3://{BUCKET}/{ARQUIVO_S3}")
+        print(f"✅ Arquivo enviado para s3://{BUCKET}/{ARQUIVO_S3}")
     except Exception as e:
         raise RuntimeError(f"❌ Falha ao enviar para o S3: {e}")
 

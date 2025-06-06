@@ -16,7 +16,6 @@ USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 
 if USE_S3:
     import boto3
-
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")
@@ -30,7 +29,6 @@ if USE_S3:
         aws_session_token=AWS_SESSION_TOKEN
     )
     s3 = session.client("s3")
-
     print("☁️ Lendo dados do S3...")
     try:
         obj = s3.get_object(Bucket=BUCKET, Key=ARQUIVO_S3)
@@ -44,7 +42,7 @@ else:
         raise FileNotFoundError(f"Arquivo {ARQUIVO_LOCAL} não encontrado para treinamento.")
     df = pd.read_parquet(ARQUIVO_LOCAL)
 
-# Garantir que a coluna 'Date' existe e está no formato datetime
+# Assegurar coluna 'Date' no formato datetime
 if 'Date' not in df.columns and 'date' in df.columns:
     df.rename(columns={'date': 'Date'}, inplace=True)
 

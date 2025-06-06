@@ -4,7 +4,7 @@ Este projeto foi desenvolvido dentro das restrições da AWSLab Tech Challenge 4
 
 Projeto completo de coleta, processamento, treinamento e deploy de modelo LSTM para previsão de preço de ações.
 
-Visão Geral
+# Visão Geral
 
 - Coleta resiliente de dados financeiros (Yahoo Finance + Alpha Vantage + Mock)
 - Processamento e normalização dos dados
@@ -12,7 +12,7 @@ Visão Geral
 - Deploy automatizado no EC2 (AWS) utilizando Docker para isolamento e escalabilidade
 - Gerenciamento automatizado de credenciais temporárias AWS
 
-Arquitetura
+# Arquitetura
 
 - Backend: FastAPI
 - ML: Tensorflow + LSTM
@@ -21,11 +21,11 @@ Arquitetura
 - CI Local: Powershell para build e envio
 - CI EC2: Shell Scripts para deploy automático e gestão do container Docker
 
-Repositório
+# Repositório
 
 https://github.com/bru-guimaraes/techchallenge4_bruna
 
-Cumprimento dos Requisitos do Projeto
+# Cumprimento dos Requisitos do Projeto
 
 1. Extração dos dados: A coleta é realizada a partir de múltiplas fontes financeiras (Yahoo Finance, Alpha Vantage e dados mock), garantindo resiliência e disponibilidade.
 
@@ -37,7 +37,7 @@ Cumprimento dos Requisitos do Projeto
 
 5. Monitoramento e escalabilidade: O uso do Docker e AWS possibilita monitoramento via CloudWatch e escalabilidade futura do ambiente.
 
-Configuração Inicial
+# Configuração Inicial
 
 1. Criar o arquivo .env (NÃO VERSIONADO)
 
@@ -60,9 +60,7 @@ PEM_PATH=
 
 ALPHA_VANTAGE_API_KEY=L2MMCXP58F5Y5F9K
 
-# A API será acessada diretamente pelo IP público da instância EC2.
-
-Pipeline de Execução
+# Pipeline de Execução
 
 a) Build local (Windows):
 
@@ -101,7 +99,7 @@ Este script realiza:
 - Parada, remoção e reconstrução do container Docker com a aplicação
 - Inicialização do container expondo a API na porta 80
 
-API Online
+# API Online
 
 A API fica disponível no IP público da instância EC2:
 
@@ -118,7 +116,53 @@ Exemplo de requisição JSON:
   "historico": [10,11,12,13,14,15,16,17,18,19,20,...]
 }
 
-Extras de Resiliência Implementados
+# Validação do Monitoramento com AWS CloudWatch
+
+Após o deploy automático que configura e inicia o AWS CloudWatch Agent na instância EC2, você pode validar se o monitoramento está ativo seguindo estes passos:
+
+1. Acesse o Console AWS:
+   https://console.aws.amazon.com/cloudwatch/
+
+2. No menu lateral, selecione "Metrics" (Métricas).
+
+3. Procure pelo namespace do agente do CloudWatch, geralmente chamado de:
+   - "CWAgent"
+   - Ou o nome personalizado configurado no arquivo `cloudwatch-config.json`
+
+4. Visualize métricas importantes como:
+   - CPU Utilization (Uso de CPU)
+   - Memory Utilization (Uso de memória)
+   - Disk I/O (Operações de disco)
+   - Network Traffic (Tráfego de rede)
+   - Logs do container Docker, se configurado
+
+5. Para conferir os logs, no menu lateral selecione "Logs" e procure o grupo de logs configurado, geralmente com nome similar ao serviço ou container.
+
+6. Verifique se os logs e métricas estão sendo atualizados em tempo real conforme a aplicação estiver rodando.
+
+---
+
+Caso não encontre métricas ou logs, verifique:
+
+- Se o serviço `amazon-cloudwatch-agent` está ativo na instância EC2:
+
+- Se o arquivo de configuração `cloudwatch-config.json` está presente e correto no caminho `/opt/aws/amazon-cloudwatch-agent/etc/`.
+
+- Se a política IAM da instância EC2 permite envio de métricas e logs para o CloudWatch.
+
+---
+
+Este monitoramento ajuda a:
+
+- Detectar possíveis gargalos de CPU ou memória.
+- Identificar problemas de disco e rede.
+- Monitorar o comportamento do container Docker da API.
+- Facilitar a escalabilidade e manutenção em produção.
+
+---
+
+
+# Extras de Resiliência Implementados
 
 - Multi-source de dados garantindo alta disponibilidade e redundância
 - Automação para atualização de credenciais AWS temporárias
@@ -126,7 +170,7 @@ Extras de Resiliência Implementados
 - Deploy e build totalmente automatizados para facilitar uso em diferentes ambientes sem necessidade de intervenção manual
 - Logs e mensagens claras para acompanhamento e diagnóstico durante o deploy e execução
 
-Orientação para novo EC2
+# Orientação para novo EC2
 
 sudo yum update -y
 sudo yum install git -y
