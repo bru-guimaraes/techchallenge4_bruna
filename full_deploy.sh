@@ -58,7 +58,7 @@ git fetch --all
 git reset --hard origin/main
 echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 
-# --- Criar ou atualizar ambiente conda ---
+# --- Criar ou verificar ambiente conda ---
 echo "♻️ Verificando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
   echo "✅ Ambiente lstm-pipeline já existe, ativando sem atualizar..."
