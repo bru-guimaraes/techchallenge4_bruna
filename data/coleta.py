@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import yfinance as yf
 from alpha_vantage.timeseries import TimeSeries
+from dotenv import load_dotenv
 
 # Carrega as variáveis do arquivo .env que deve estar na raiz do projeto
 load_dotenv()

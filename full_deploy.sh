@@ -59,17 +59,9 @@ git reset --hard origin/main
 echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 
 # --- Criar ou atualizar ambiente conda ---
-echo "♻️ Criando ou atualizando ambiente conda lstm-pipeline..."
+echo "♻️ Verificando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
-  echo "✅ Ambiente lstm-pipeline encontrado, atualizando..."
-  if ! conda env update -n lstm-pipeline -f environment.yml --prune; then
-    echo "⚠️ Falha ao atualizar ambiente, tentando recriar..."
-    conda env remove -n lstm-pipeline -y
-    conda env create -f environment.yml || {
-      echo "❌ Falha crítica ao criar ambiente conda."
-      exit 1
-    }
-  fi
+  echo "✅ Ambiente lstm-pipeline já existe, ativando sem atualizar..."
 else
   echo "♻️ Ambiente lstm-pipeline não encontrado, criando..."
   conda env create -f environment.yml || {
