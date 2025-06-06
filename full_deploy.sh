@@ -59,6 +59,7 @@ echo "🔄 Código atualizado para commit: $(git rev-parse --short HEAD)"
 # --- Criar ou atualizar ambiente conda ---
 echo "♻️ Criando ou atualizando ambiente conda lstm-pipeline..."
 if conda env list | grep -q "lstm-pipeline"; then
+  echo "✅ Ambiente lstm-pipeline encontrado, atualizando..."
   if ! conda env update -n lstm-pipeline -f environment.yml --prune; then
     echo "⚠️ Falha ao atualizar ambiente, tentando recriar..."
     conda env remove -n lstm-pipeline -y
@@ -68,6 +69,7 @@ if conda env list | grep -q "lstm-pipeline"; then
     }
   fi
 else
+  echo "♻️ Ambiente lstm-pipeline não encontrado, criando..."
   conda env create -f environment.yml || {
     echo "❌ Falha crítica ao criar ambiente conda."
     exit 1
@@ -121,7 +123,6 @@ echo "🚀 Executando teste de métrica customizada no CloudWatch..."
 conda activate lstm-pipeline
 python "$PROJECT_DIR/cloudwatch_test.py" || echo "⚠️ Falha ao executar teste CloudWatch."
 echo "✅ Teste CloudWatch finalizado."
-
 
 # --- Para e remove containers e imagens antigas ---
 echo "🐳 Parando e removendo containers Docker antigos..."
